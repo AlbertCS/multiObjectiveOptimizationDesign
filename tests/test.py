@@ -1,23 +1,8 @@
-from multiobjective_design.base import Sequence
+from multiobjective_design.base import Silent
 
 
 def main():
-    seq = Sequence(
-        sequence="ATCG",
-        chain="A",
-        index=1,
-        native="ATCG",
-        child=False,
-        parent=False,
-        active=True,
-        label="Test",
-        mutated=False,
-        recombined=False,
-        reverted=False,
-        recombinedMutated=False,
-    )
-
-    seq.mutatePosition(0, "G")
+    silent = Silent("../data/01_population.out", params=)
 
 
 if __name__ == "__main__":
