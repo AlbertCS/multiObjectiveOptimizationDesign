@@ -7,11 +7,11 @@ from math import floor
 
 import numpy as np
 import pandas as pd
-from base import Sequence, Silent
 from pyrosetta import *
-from support import analysis_geneticAlgorithm
 
-from . import rosettaScripts as rs
+# from . import rosettaScripts as rs
+from .base import Sequence, Silent
+from .support import analysis_geneticAlgorithm
 
 
 class geneticAlgorithm:
@@ -37,23 +37,6 @@ class geneticAlgorithm:
     ):
         pass
 
-    def readIterationScores(self, iterations) -> pd.DataFrame:
-        pass
-
-    def checkPreviousIterations(self):
-        pass
-
-    def checkIfIterationIsFinished(self, iteration) -> bool:
-        pass
-
-    def checkIfIterationIsMutated(self) -> bool:
-        pass
-
-    def addIterationDataToMSD(
-        self, iteration, active=True, parent=False, child=False, verbose=True
-    ):
-        pass
-
     def deactivateParents(self):
         pass
 
@@ -64,23 +47,6 @@ class geneticAlgorithm:
         executable="rosetta_scripts.mpi.linuxgccrelease",
         mutated_seq_pct=0.5,
     ):
-        pass
-
-    def setIterationFolders(self, iteration):
-        pass
-
-    def setIterationData(self, iteration, overwrite=False):
-        pass
-
-    def setUpIterationInputs(
-        self,
-        iteration,
-        relax_options=True,
-        nstruct=1,
-        executable="rosetta_scripts.mpi.linuxgccrelease",
-        parallelization=None,
-        cpus=1,
-    ) -> list[str]:
         pass
 
     def createPopulationByRecombination(self, max_attempts=1000, verbose=True) -> bool:
@@ -105,21 +71,6 @@ class geneticAlgorithm:
         pass
 
     def setXMLProtocol(self, xml_object):
-        pass
-
-    def selectParentsByNonDominatedRank(
-        self,
-        iteration,
-        objectives,
-        percentage=50.0,
-        verbose=True,
-        bias_type="max_energy",
-        KT_min=0.5,
-        KT_update=10,
-        max_energy=10,
-        max_energy_state=1,
-        distances=None,
-    ):
         pass
 
     def assignCrowdingDistance(self, data, objectives) -> pd.DataFrame:

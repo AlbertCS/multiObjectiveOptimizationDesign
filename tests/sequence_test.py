@@ -17,7 +17,7 @@ class TestSequence(unittest.TestCase):
             mutated=False,
             recombined=False,
             reverted=False,
-            recombinedMutated=False,
+            recombined_mutated=False,
         )
 
     def test_init(self):
@@ -32,18 +32,18 @@ class TestSequence(unittest.TestCase):
         self.assertEqual(self.seq.mutated, False)
         self.assertEqual(self.seq.recombined, False)
         self.assertEqual(self.seq.reverted, False)
-        self.assertEqual(self.seq.recombinedMutated, False)
+        self.assertEqual(self.seq.recombined_mutated, False)
 
     def test_contains_energies(self):
         self.seq.state_energy = (1, 2.0)
         self.assertTrue(self.seq.contains_energies(1))
 
     def test_getMutations(self):
-        self.seq.mutatePosition(0, "G")
+        self.seq.mutate_position(0, "G")
         self.assertEqual(self.seq.mutations, [("A", 1, "G")])
 
     def test_mutatePosition(self):
-        self.seq.mutatePosition(0, "G")
+        self.seq.mutate_position(0, "G")
         self.assertEqual(self.seq.sequence, "GTCG")
 
     def test_len(self):

@@ -1,4 +1,4 @@
-class Metrics:
+class Metric:
     def __init__(self, data):
         self.data = data
 

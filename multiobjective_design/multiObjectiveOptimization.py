@@ -105,7 +105,3 @@ class moo:
 
     def _checkIfSequenceExists(self, sequence, chain=None) -> int:
         pass
-
-
-def _readSequencesFromFasta(fasta_file) -> dict:
-    pass

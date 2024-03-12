@@ -1,8 +1,7 @@
-from base.aminoacids import PROTEIN_AA
+from .aminoacids import PROTEIN_AA
 
 
 class State:
-    pass
 
     def __init__(self, pose, label):
         pass
