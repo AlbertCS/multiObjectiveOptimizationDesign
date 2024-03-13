@@ -139,7 +139,7 @@ class Sequence:
         self._mutations = value
 
     @states_energy.setter
-    def state_energy(self, value):
+    def states_energy(self, value):
         """
         Set the optimised energy of the sequence in the context of a specific state.
 
@@ -176,17 +176,26 @@ class Sequence:
         Return if sequence contain N energy values in its states_energy attribute
         for the N number of states specified.
         """
+        # count = 0
+        # for state in self.states_energy:
+        #     if isinstance(self.states_energy[state], float):
+        #         if not np.isnan(self.states_energy[state]):
+        #             count += 1
+        # if count == n_states:
+        #     return True
+        # else:
+        #     return False
         count = 0
-        for state in self.states_energy:
-            if isinstance(self.states_energy[state], float):
-                if not np.isnan(self.states_energy[state]):
+        for state, energy in self.states_energy.items():
+            if isinstance(energy, float):
+                if not np.isnan(energy):
                     count += 1
         if count == n_states:
             return True
         else:
             return False
 
-    def getMutations(self):
+    def get_mutations(self):
         """
         Get a list of mutations from a reference sequence
 
@@ -201,6 +210,16 @@ class Sequence:
                 self.mutations.append((r, i + 1, s))
 
     def mutate_position(self, index, aa):
+        """
+        Mutate a specific position in the sequence.
+
+        Parameters
+        ==========
+        index : int
+            Position in the sequence to mutate.
+        aa : str
+            Amino acid to mutate the position to.
+        """
         sequence = list(self.sequence)
         sequence[index] = aa
         self.sequence = "".join(sequence)
@@ -226,7 +245,7 @@ class Sequence:
         return len(self.sequence)
 
     def __repr__(self):
-        label = f"Chain :{self.chain}n"
+        label = f"Chain :{self.chain}\n"
         label += f"Index : {self.index}\n"
         label += f"Active : {self.active}\n"
         label += f"Parent : {self.parent}\n"

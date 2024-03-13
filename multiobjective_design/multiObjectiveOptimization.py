@@ -1,6 +1,3 @@
-from base.aminoacids import PROTEIN_AA
-from base.sequence import Sequence
-from base.state import State
 from pyrosetta import Pose, Vector1, init, pose_from_file
 
 init()
@@ -15,7 +12,7 @@ class moo:
         self.states = {}
         self.positive_states = []
         self.negative_states = []
-        self.sequences = {}
+        self.sequences = []  # list of sequences to not repeat them
         self.n_states = 0
         self.n_sequences = {}
         self.active_chains = []
@@ -23,6 +20,8 @@ class moo:
         self.allowed_aminoacids = {}
         self.params_files = []
         self.native_sequence = None
+        self.metrics = {}
+        self.objectives = {}
 
     def addStateFromPose(
         self,
@@ -104,4 +103,7 @@ class moo:
         pass
 
     def _checkIfSequenceExists(self, sequence, chain=None) -> int:
+        pass
+
+    def non_dominated_sorting(self, population):
         pass

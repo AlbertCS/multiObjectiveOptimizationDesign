@@ -6,16 +6,16 @@ class State:
     def __init__(self, pose, label):
         pass
 
-    def getStateSequence(self, by_chains=False) -> str:
+    def get_state_sequence(self, by_chains=False) -> str:
         pass
 
-    def _getPose2PDB(self) -> dict:
+    def _get_pose_to_pdb(self) -> dict:
         pass
 
-    def _getPDB2Pose(self) -> dict:
+    def _get_pdb_to_pose(self) -> dict:
         pass
 
-    def _getPDB2Sequence(self) -> dict:
+    def _get_pdb_to_sequence(self) -> dict:
         pass
 
     def __repr__(self):
