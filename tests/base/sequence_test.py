@@ -1,6 +1,6 @@
 import unittest
 
-from multiobjective_design.base.sequence import Sequence
+from mood.base.sequence import Sequence
 
 
 class TestSequence(unittest.TestCase):

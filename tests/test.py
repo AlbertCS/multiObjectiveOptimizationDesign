@@ -1,4 +1,4 @@
-from multiobjective_design.base import Sequence
+from mood.base import Sequence
 
 
 def main():

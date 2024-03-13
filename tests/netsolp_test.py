@@ -1,4 +1,4 @@
-from multiobjective_design.metrics.netsolp import Netsolp
+from mood.metrics.netsolp import Netsolp
 
 net = Netsolp("data")
 net.compute()

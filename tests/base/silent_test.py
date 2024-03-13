@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from pyrosetta import Pose, init, rosetta
 
-from multiobjective_design.base import Silent
+from mood.base import Silent
 
 
 class TestSilent(unittest.TestCase):
