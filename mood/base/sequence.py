@@ -171,6 +171,42 @@ class Sequence:
             raise ValueError(message)
         self.native = native_sequence
 
+    @active.setter
+    def active(self, value):
+        self._active = value
+
+    @recombined.setter
+    def recombined(self, value):
+        self._recombined = value
+
+    @mutated.setter
+    def mutated(self, value):
+        self._mutated = value
+
+    @reverted.setter
+    def reverted(self, value):
+        self._reverted = value
+
+    @recombined_mutated.setter
+    def recombined_mutated(self, value):
+        self._recombined_mutated = value
+
+    @parent.setter
+    def parent(self, value):
+        self._parent = value
+
+    @child.setter
+    def child(self, value):
+        self._child = value
+
+    @label.setter
+    def label(self, value):
+        self._label = value
+
+    @chain.setter
+    def chain(self, value):
+        self._chain = value
+
     def contains_energies(self, n_states):
         """
         Return if sequence contain N energy values in its states_energy attribute
@@ -223,7 +259,7 @@ class Sequence:
         sequence = list(self.sequence)
         sequence[index] = aa
         self.sequence = "".join(sequence)
-        self.getMutations()
+        self.get_mutations()
 
     def __iter__(self):
         # returning __iter__ object

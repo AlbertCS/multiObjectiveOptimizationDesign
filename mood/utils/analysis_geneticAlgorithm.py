@@ -2,7 +2,8 @@ import ast
 import os
 
 import pandas as pd
-from base.silent_file import Silent
+
+from mood.base.silent_file import Silent
 
 
 class analyseGeneticAlgorithm:
