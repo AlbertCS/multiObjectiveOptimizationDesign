@@ -14,9 +14,6 @@ class GeneticAlgorithm:
     def eval_population(self, population):
         pass
 
-    def is_termination_condition_met(self, generations_count, max_generations):
-        pass
-
     def select_parent(self, population):
         pass
 
