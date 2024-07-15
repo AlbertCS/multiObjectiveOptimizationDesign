@@ -1,5 +1,5 @@
 from mood.base import Sequence
-from mood.genetic_algorithm import GeneticAlgorithm
+from mood.optimizers.genetic_algorithm import GeneticAlgorithm
 
 
 def main():
