@@ -4,11 +4,78 @@
     initializing the correct structures, distributing the work, and logging.
 """
 
+import argparse
 import logging
 
 import pandas as pd
+from base.data import AlgorithmDataSingleton
 from metrics import Metric
-from optimizers import Optimizer
+from metrics.alphabetic import Alphabet
+from optimizers import GeneticAlgorithm, Optimizer
+
+
+def arg_parse():
+    parser = argparse.ArgumentParser(description="Train the models")
+
+    parser.add_argument(
+        "-m",
+        "--metrics",
+        required=True,
+        default=["total_energy"],
+        type=list,
+        help="The metrics to evaluate",
+    )
+    parser.add_argument(
+        "-p",
+        "--population_size",
+        required=False,
+        default=100,
+        type=int,
+        help="The total population size of the genetic algorithm",
+    )
+    parser.add_argument(
+        "-m",
+        "--mutation_rate",
+        required=False,
+        default=50,
+        type=float,
+        help="The number of threads to search for the hyperparameter space",
+    )
+    parser.add_argument(
+        "-i",
+        "--max_iterations",
+        required=False,
+        default=100,
+        type=int,
+        help="The maximum number of iterations to run the optimization",
+    )
+    parser.add_argument(
+        "-s",
+        "--seed",
+        required=False,
+        default=12345,
+        type=int,
+        help="The seed for the random number generator",
+    )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        required=False,
+        default=False,
+        type=bool,
+        help="The flag to enable the debug mode",
+    )
+
+    args = parser.parse_args()
+
+    return [
+        args.metrics,
+        args.population_size,
+        args.mutation_rate,
+        args.max_iterations,
+        args.seed,
+        args.debug,
+    ]
 
 
 class moo:
@@ -19,6 +86,9 @@ class moo:
         debug: bool = False,
         max_iteration: int = 100,
         seed=12345,
+        pdb=None,
+        chains="A",
+        data=None,
     ) -> None:
 
         # Define the logger
@@ -26,14 +96,16 @@ class moo:
             logging.basicConfig(
                 level=logging.DEBUG,
                 format="%(asctime)s - %(levelname)s - %(message)s",
-                datefmt="%d-%b-%y %H:%M:%S",
+                datefmt="%d-%m-%y %H:%M:%S",
+                filemode="w",
                 filename="mood.log",
             )
         else:
             logging.basicConfig(
                 level=logging.INFO,
                 format="%(asctime)s - %(levelname)s - %(message)s",
-                datefmt="%d-%b-%y %H:%M:%S",
+                datefmt="%d-%m-%y %H:%M:%S",
+                filemode="w",
                 filename="mood.log",
             )
 
@@ -42,6 +114,26 @@ class moo:
         self.metrics = metrics
         self.max_iteration = max_iteration
         self.seed = seed
+        self.pdb = pdb
+        self.chains = chains
+        self.data = data
+
+        if isinstance(chains, str):
+            self.chains = [chains]
+        elif isinstance(chains, list):
+            self.chains = chains
+
+    def _get_seq_from_pdb(self, structure_id="initial_structure", pdb_file=None):
+        from Bio.PDB.PDBParser import PDBParser
+        from Bio.SeqUtils import seq1
+
+        parser = PDBParser()
+        structure = parser.get_structure(structure_id, pdb_file)
+        chains = {
+            chain.id: seq1("".join(residue.resname for residue in chain))
+            for chain in structure.get_chains()
+        }
+        return chains
 
     def run(self):
 
@@ -56,15 +148,29 @@ class moo:
         logging.info("\tSeed: " + str(self.seed))
         logging.info("------------------------------------------------")
 
-        for self.iteration in range(self.max_iteration):
-            logging.info(f"***Starting iteration {self.iteration}***")
-            if self.iteration == 0:
-                logging.info("Initializing the first population")
-                # Create the initial population
-                self.optimizer.init_population()
+        self.current_iteration = 0
 
-            # Get the sequences from the optimizer
-            sequences = self.optimizer.get_sequences()
+        if self.current_iteration == self.max_iteration + 1:
+            message = "Genetic algorithm has finished running. "
+            message += "Increase the number of iterations to continue."
+            print(message)
+            return
+
+        for self.current_iteration in range(self.max_iteration):
+            logging.info(f"***Starting iteration {self.current_iteration}***")
+            if self.current_iteration == 0:
+                logging.debug("Reading the input pdb")
+                # Read the pdb file and get the sequences by chain
+                seq_chains = self._get_seq_from_pdb(pdb_file=self.pdb)
+                # For each chain, initialize the population
+                for chain in self.chains:
+                    logging.info("Initializing the first population")
+                    # Create the initial population
+                    self.optimizer.init_population(seq_chains[chain])
+
+            else:
+                # Get the sequences from the optimizer
+                sequences = self.optimizer.get_sequences()
 
             # Calculate the metrics
             logging.info("Calculating the metrics")
@@ -76,8 +182,34 @@ class moo:
 
             # Evaluate the population and rank the individuals
             logging.info("Evaluating and ranking the population")
-            self.optimizer.eval_population(metric_df)
+            # self.optimizer.eval_population(metric_df)
+            self.optimizer.eval_population()
 
             # Create the child population
             logging.info("Creating the child population")
             self.optimizer.crossOver_mutate()
+
+        logging.info("-------Finishing the optimization process-------")
+
+
+if __name__ == "__main__":
+    print("*Running the Multi-Objective Optimization module*")
+    # metrics, population_size, mutation_rate, max_iterations, seed, debug = arg_parse()
+    # TODO translate the metrics list to the respective objects
+    # TODO translate the optimizer to the respective object
+    data = AlgorithmDataSingleton()
+    ga = GeneticAlgorithm(data=data)
+    metrics = [Alphabet("folder")]
+    debug = True
+    max_iterations = 10
+    pdb = "/home/albertcs/GitHub/AlbertCS/multiObjectiveDesign/tests/data/NAGox-glucose-5.pdb"
+    mood = moo(
+        optimizer=ga,
+        metrics=metrics,
+        debug=debug,
+        max_iteration=max_iterations,
+        pdb=pdb,
+        data=data,
+    )
+    mood.run()
+    print("*Finished running the Multi-Objective Optimization module*")
