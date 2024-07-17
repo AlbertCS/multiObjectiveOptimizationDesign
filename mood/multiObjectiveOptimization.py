@@ -6,6 +6,7 @@
 
 import argparse
 import logging
+import random
 
 import pandas as pd
 from base.data import AlgorithmDataSingleton
@@ -81,7 +82,7 @@ def arg_parse():
 class moo:
     def __init__(
         self,
-        optimizer: Optimizer = None,
+        optimizer: str = None,
         metrics: list[Metric] = None,
         debug: bool = False,
         max_iteration: int = 100,
@@ -89,6 +90,8 @@ class moo:
         pdb=None,
         chains="A",
         data=None,
+        mutation_rate=None,
+        mutatable_positions=None,
     ) -> None:
 
         # Define the logger
@@ -110,18 +113,32 @@ class moo:
             )
 
         # Initialize the optimizer and metrics
-        self.optimizer = optimizer
+        available_optimizers = ["genetic_algorithm"]
+        if optimizer not in available_optimizers:
+            raise ValueError(
+                f"Optimizer {optimizer} not available. Choose from {available_optimizers}"
+            )
+        else:
+            
+        self.optimizer = Optimizer()
         self.metrics = metrics
+
         self.max_iteration = max_iteration
-        self.seed = seed
+        random.seed(seed)
         self.pdb = pdb
         self.chains = chains
         self.data = data
+        self.mutation_rate = {}
 
         if isinstance(chains, str):
             self.chains = [chains]
         elif isinstance(chains, list):
             self.chains = chains
+
+        for chain in self.chains:
+            if mutation_rate is None:
+                self.mutation_rate[chain] = 1 / len(self.mutatable_positions[chain])
+                self.optimizer.mutation_rate = mutation
 
     def _get_seq_from_pdb(self, structure_id="initial_structure", pdb_file=None):
         from Bio.PDB.PDBParser import PDBParser
