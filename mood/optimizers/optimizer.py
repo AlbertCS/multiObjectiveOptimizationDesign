@@ -36,6 +36,7 @@ class Optimizer:
             raise Exception(  # pylint: disable=broad-exception-raised
                 f"Invalid optimizer type {optimizerType}. Allowed types: {OptimizersType}"
             )
+        self.TYPE: OptimizersType = optimizerType
 
     @abstractmethod
     def init_population(self):

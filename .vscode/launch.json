@@ -11,6 +11,14 @@
             "program": "${workspaceFolder}/mood/multiObjectiveOptimization.py",
             "console": "integratedTerminal",
             "justMyCode": false,
+        },
+        {
+            "name": "Test Ga",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/optimizers/test_ga.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
         }
     ]
 }

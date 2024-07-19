@@ -1,5 +1,5 @@
 from .genetic_algorithm import GeneticAlgorithm
-from .optimizers import Optimizer
+from .optimizer import Optimizer
 
 # Set the exported modules
 __all__ = [
