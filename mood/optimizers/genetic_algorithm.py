@@ -3,6 +3,7 @@ import random
 from typing import Any, Dict, List
 
 from Bio.Seq import MutableSeq, Seq
+from icecream import ic
 
 from mood.optimizers.optimizer import Optimizer, OptimizersType
 
@@ -12,7 +13,7 @@ class GeneticAlgorithm(Optimizer):
         self,
         population_size: int = 100,
         mutation_rate: float = 0.005,
-        init_mutation_rate: float = 0.1,
+        init_mutation_rate: float = 0.6,
         seed: int = 12345,
         debug: bool = False,
         data: Any = None,
@@ -40,13 +41,25 @@ class GeneticAlgorithm(Optimizer):
         self.mutable_aa = mutable_aa
         self.init_mutation_rate = init_mutation_rate
 
+    @property
+    def sequences(self):
+        return self.data.sequences
+
+    @property
+    def data_frame(self):
+        return self.data.data_frame
+
     def init_population(self, sequences_initial):
         logging.info("Initializing the population")
         try:
+            if len(sequences_initial) == 0:
+                logging.error("No initial sequences provided")
+                raise ValueError("No initial sequences provided")
             # Getting the number of missing sequences
             n_missing = self.population_size - len(sequences_initial)
+            ic(sequences_initial)
             # Calculating the index of the next sequence to generate
-            index = self.population_size - n_missing + 1
+            index = self.population_size - n_missing
             if n_missing == 0:
                 logging.info("Population already at the desired size")
             else:
@@ -59,7 +72,10 @@ class GeneticAlgorithm(Optimizer):
                         f"Populating {self.mutation_seq_percent * 100}% of the {self.population_size} total population"
                     )
                 # Adding sequences by mutation til the desired percentage is reached
-                while index <= self.population_size * self.mutation_seq_percent:
+                while (
+                    index <= self.population_size * self.mutation_seq_percent
+                    and index < 3
+                ):
                     logging.debug(f"Adding sequence {index} to the population")
                     # Check if the input sequences of the algorithm are more than one, then select one random.
                     if len(sequences_initial) > 1:
@@ -69,10 +85,17 @@ class GeneticAlgorithm(Optimizer):
                     else:
                         sequence_to_start_from = sequences_initial[0]
                     mutated_sequence, _, _ = self.generate_mutation_sequence(
-                        sequence_to_start_from, self.init_population
+                        sequence_to_start_from, self.init_mutation_rate
                     )
                     # Add the new sequence to the data object
-                    self.data.add_sequence(mutated_sequence)
+                    ic(self.data.sequences)
+                    added = self.data.add_sequence(mutated_sequence)
+                    while not added:
+                        mutated_sequence, _, _ = self.generate_mutation_sequence(
+                            sequence_to_start_from, self.init_mutation_rate
+                        )
+                        added = self.data.add_sequence(mutated_sequence)
+                    ic(self.data.sequences)
                     index += 1
                     number_of_sequences = len(self.data.sequences)
                     logging.debug(
@@ -86,18 +109,14 @@ class GeneticAlgorithm(Optimizer):
                         f"Adding sequence {number_of_sequences} to the population by CrossOver"
                     )
                     # Get two random sequences to crossover
-                    sequence_keys = list(self.data.sequences.keys())
-                    sequence1_id = random.choice(sequence_keys)
-                    sequence2_id = random.choice(sequence_keys)
-                    # Check that the sequences are different
-                    while sequence1_id == sequence2_id:
-                        sequence2_id = random.choice(sequence_keys)
-                    crossover_sequence = self.generate_crossover_sequence(
-                        self.data.sequences[sequence1_id],
-                        self.data.sequences[sequence2_id],
-                    )
+                    crossover_sequence = self.generate_crossover_sequence()
                     # Add the new sequence to the data object
-                    self.data.add_sequence(crossover_sequence)
+                    ic(self.data.sequences)
+                    added = self.data.add_sequence(crossover_sequence)
+                    while not added:
+                        crossover_sequence = self.generate_crossover_sequence()
+                        added = self.data.add_sequence(crossover_sequence)
+                    ic(self.data.sequences)
                     number_of_sequences = len(self.data.sequences)
                     logging.debug(f"Population size: {number_of_sequences}")
 
@@ -106,7 +125,12 @@ class GeneticAlgorithm(Optimizer):
 
     def generate_mutation_sequence(self, sequence_to_mutate, mutation_rate):
         logging.debug("Generating a mutation sequence")
-
+        if not self.mutable_positions:
+            logging.error("No mutable positions provided")
+            raise ValueError("No mutable positions provided")
+        if not self.mutable_aa:
+            logging.error("No mutable amino acids provided")
+            raise ValueError("No mutable amino acids provided")
         old_aa = {}
         new_aa = {}
         # Transform to a mutable sequence
@@ -122,12 +146,22 @@ class GeneticAlgorithm(Optimizer):
         return Seq(mutable_seq), old_aa, new_aa
 
     def generate_crossover_sequence(
-        self, sequence1, sequence2, crossover_type="uniform"
+        self, sequence1=None, sequence2=None, crossover_type="uniform"
     ) -> Seq:
+        # If no sequence were given, select two random sequences
+        if sequence1 is None and sequence2 is None:
+            sequence_keys = list(self.data.sequences.keys())
+            sequence1_id = random.choice(sequence_keys)
+            sequence2_id = random.choice(sequence_keys)
+            # Check that the sequences are different
+            while sequence1_id == sequence2_id:
+                sequence2_id = random.choice(sequence_keys)
+            sequence1 = (self.data.sequences[sequence1_id],)
+            sequence2 = (self.data.sequences[sequence2_id],)
         logging.debug("Generating a crossover sequence")
         crossoverTypes = ["uniform", "two_point", "single_point"]
         if crossover_type not in crossoverTypes:
-            raise Exception(
+            raise ValueError(
                 f"Invalid crossover type {crossover_type}. Allowed types: {crossoverTypes}"
             )
         if crossover_type == "two_point":

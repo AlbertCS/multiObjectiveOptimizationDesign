@@ -1,6 +1,10 @@
 from abc import abstractmethod
 from enum import Enum
 
+import pandas as pd
+
+from mood.base.data import AlgorithmDataSingleton
+
 
 class OptimizersType(str, Enum):
     """
@@ -31,7 +35,14 @@ class Optimizer:
         self.mutation_rate = mutation_rate
         self.seed = seed
         self.debug = debug
-        self.data = data
+        self.data = (
+            data
+            if data is not None
+            else AlgorithmDataSingleton(
+                sequences={},
+                data_frame=pd.DataFrame(columns=["seq_index", "Sequence", "iteration"]),
+            )
+        )
         if optimizerType not in (OptimizersType):
             raise Exception(  # pylint: disable=broad-exception-raised
                 f"Invalid optimizer type {optimizerType}. Allowed types: {OptimizersType}"
