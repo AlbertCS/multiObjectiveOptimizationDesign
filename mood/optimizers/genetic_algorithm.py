@@ -138,7 +138,11 @@ class GeneticAlgorithm(Optimizer):
         # Iterate over the aa in the mutable sequence
         for i, aa in enumerate(mutable_seq, start=1):
             # If the position is mutable and the mutation rate is met
-            if i in self.mutable_positions and self.rng.random() <= mutation_rate:
+            if (
+                i in self.mutable_positions
+                and i in self.mutable_aa
+                and self.rng.random() <= mutation_rate
+            ):
                 new_residues = [nuc for nuc in self.mutable_aa[i] if nuc != aa]
                 old_aa[i] = aa
                 new_aa[i] = random.choice(new_residues)

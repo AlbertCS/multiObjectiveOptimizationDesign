@@ -12,7 +12,7 @@ class TestGeneticAlgorithm(unittest.TestCase):
     def setUp(self):
         self.ga = GeneticAlgorithm(
             population_size=5,
-            mutable_positions=[1, 2, 3, 4, 6, 7, 10],
+            mutable_positions=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
             mutable_aa={
                 1: ["A", "P", "S"],
                 2: ["M"],
@@ -46,8 +46,8 @@ class TestGeneticAlgorithm(unittest.TestCase):
         self.assertEqual(mutated_seq[1], "M")
 
     def test_uniform_crossover(self):
-        seq1 = Seq("AAAA")
-        seq2 = Seq("TTTT")
+        seq1 = Seq("AAAAAAAAAA")
+        seq2 = Seq("TTTTTTTTTT")
         print("  **Uniform crossover**")
         crossover_seq = self.ga.uniform_crossover(seq1, seq2)
         ic(crossover_seq)
@@ -62,8 +62,8 @@ class TestGeneticAlgorithm(unittest.TestCase):
     # Performing two-point crossover correctly
     def test_two_point_crossover(self):
         print("  **Two point crossover**")
-        seq1 = Seq("RRRRRRRRRRRRRRR")
-        seq2 = Seq("VVVVVVVVVVVVVVV")
+        seq1 = Seq("RRRRRRRRRR")
+        seq2 = Seq("VVVVVVVVVV")
         crossover_seq = self.ga.two_point_crossover(seq1, seq2)
         ic(crossover_seq)
         crossover_seq = self.ga.two_point_crossover(seq1, seq2)
