@@ -1,6 +1,7 @@
 import random
 from typing import Any, Dict, List
 
+import numpy as np
 from Bio.Seq import MutableSeq, Seq
 from icecream import ic
 
@@ -56,6 +57,7 @@ class GeneticAlgorithm(Optimizer):
         if len(sequences_initial) == 0:
             self.logger.error("No initial sequences provided")
             raise ValueError("No initial sequences provided")
+        self.child_sequences = []
 
         try:
             # Adding the initial sequences to the population
@@ -115,14 +117,18 @@ class GeneticAlgorithm(Optimizer):
                         f"Adding sequence {number_of_sequences} to the population by CrossOver"
                     )
                     # Get two random sequences to crossover
-                    crossover_sequence = self.generate_crossover_sequence()
+                    crossover_sequence = self.generate_crossover_sequence(
+                        sequences_pool=self.child_sequences
+                    )
                     # Add the new sequence to the data object
                     added = self.data.add_sequence(crossover_sequence)
                     while not added:
                         self.logger.warning(
                             f"Sequence {crossover_sequence} already in the data, generating a new one"
                         )
-                        crossover_sequence = self.generate_crossover_sequence()
+                        crossover_sequence = self.generate_crossover_sequence(
+                            sequences_pool=self.child_sequences
+                        )
                         added = self.data.add_sequence(crossover_sequence)
                     self.child_sequences.append(crossover_sequence)
                     self.logger.debug(
@@ -131,6 +137,7 @@ class GeneticAlgorithm(Optimizer):
                     number_of_sequences = len(self.child_sequences)
                     self.logger.debug(f"Population size: {number_of_sequences}")
 
+            return self.child_sequences
         except Exception as e:
             self.logger.error(f"Error initializing the population: {e}")
 
@@ -163,15 +170,19 @@ class GeneticAlgorithm(Optimizer):
         return Seq(mutable_seq), old_aa, new_aa
 
     def generate_crossover_sequence(
-        self, sequence1=None, sequence2=None, crossover_type="uniform"
+        self,
+        sequence1=None,
+        sequence2=None,
+        crossover_type="uniform",
+        sequences_pool=None,
     ) -> Seq:
         # If no sequence were given, select two random sequences
         if sequence1 is None and sequence2 is None:
-            sequence1 = random.choice(self.child_sequences)
-            sequence2 = random.choice(self.child_sequences)
+            sequence1 = random.choice(sequences_pool)
+            sequence2 = random.choice(sequences_pool)
             # Check that the sequences are different
             while sequence1 == sequence2:
-                sequence2 = random.choice(self.child_sequences)
+                sequence2 = random.choice(sequences_pool)
 
         self.logger.debug("Generating a crossover sequence")
 
@@ -225,10 +236,106 @@ class GeneticAlgorithm(Optimizer):
         self.logger.debug(f"  Recombined_sequence: {recombined_sequence}")
         return Seq(recombined_sequence)
 
+    def logic(self, values, index, i, offset=0):
+        return values[:, index] >= (values[i, index] - offset)
+
+    def create_mask(self, values, i, offset, offset_freq):
+        dominated_mask = np.ones(values.shape[0], dtype=bool)
+        for ind in range(values.shape[1]):
+            if ind != values.shape[1] - 1:
+                dominated_mask &= self.logic(values, ind, i, offset)
+            else:
+                dominated_mask &= self.logic(values, ind, i, offset_freq)
+        return dominated_mask
+
+    def calculate_pareto_front1(self, df, dimension=1):
+        """Calculate the Pareto front from a DataFrame for maximization problems."""
+        values = df.values
+        pareto_front_mask = np.ones(values.shape[0], dtype=bool)
+        for i in range(values.shape[0]):
+            if pareto_front_mask[
+                i
+            ]:  # the dominated will be turned to False so no need to check
+                print(i)
+                # find rows that has at least 3 objectives greater than the current row and one of the objectives has to be the frequency
+                # & ((logic(values, 2, i, offset)) | (logic(values, 5, i, offset)))
+                dominated_mask = np.sum((values >= values[i]), axis=1) >= dimension
+
+                pareto_front_mask &= dominated_mask
+
+        return df[pareto_front_mask]
+
     def eval_population(self):
         print("Evaluating the population")
 
-    def generate_child_population(self, parent_sequences):
+    def generate_child_population(self, parent_sequences, max_attempts=1000):
         self.logger.info("Generating the child population")
         # Initialize the child population list
         self.child_sequences = []
+        number_of_sequences = len(self.child_sequences)
+        n_tries = 0
+        mutated_sequence = None
+        # Adding sequences by crossover til the desired population size is reached
+        while number_of_sequences < self.population_size:
+            self.logger.debug(
+                f"Adding sequence {number_of_sequences} to the population by CrossOver"
+            )
+            # Crossover
+            crossover_sequence = self.generate_crossover_sequence(
+                sequences_pool=parent_sequences
+            )
+            # Add the new sequence to the data object
+            added = self.data.add_sequence(crossover_sequence)
+            while not added:
+                self.logger.warning(
+                    f"Sequence {crossover_sequence} already in the data, generating a new one"
+                )
+                crossover_sequence = self.generate_crossover_sequence(
+                    sequences_pool=parent_sequences
+                )
+                added = self.data.add_sequence(crossover_sequence)
+                # Set a warning is not possible to create new sequences by recombination
+                if n_tries > max_attempts:
+                    self.logger.warning("Too many tries to generate a new sequence")
+                    break
+                n_tries += 1
+
+            # If it's not possible to generate new sequences by recombination, try to mutate
+            if n_tries > max_attempts and not added:
+                mutated_sequence = self.generate_mutation_sequence(
+                    sequence_to_mutate=crossover_sequence,
+                    mutation_rate=self.mutation_rate,
+                )
+                n_tries = 0
+                added = self.data.add_sequence(mutated_sequence)
+                while not added:
+                    self.logger.warning(
+                        f"Sequence {crossover_sequence} already in the data, generating a new one"
+                    )
+                    mutated_sequence = self.generate_mutation_sequence(
+                        sequence_to_mutate=crossover_sequence,
+                        mutation_rate=self.mutation_rate,
+                    )
+                    added = self.data.add_sequence(mutated_sequence)
+                    if n_tries > max_attempts:
+                        self.logger.error("Too many tries to generate a new sequence")
+                        raise RuntimeError("Too many tries to generate a new sequence")
+                    n_tries += 1
+
+            if added:
+                if mutated_sequence:
+                    self.child_sequences.append(mutated_sequence)
+                else:
+                    self.child_sequences.append(crossover_sequence)
+
+            self.logger.debug(
+                f"Child sequences after generate crossover: \n  {self.child_sequences}"
+            )
+            number_of_sequences = len(self.child_sequences)
+            self.logger.debug(f"Population size: {number_of_sequences}")
+
+            # Reset counters
+            n_tries = 0
+            mutated_sequence = None
+
+        return self.child_sequences

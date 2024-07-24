@@ -28,8 +28,9 @@ class TestGeneticAlgorithm(unittest.TestCase):
 
     def test_init_population(self):
         sequences_initial = [Seq("ATGCKPLQWR")]
-        self.ga.init_population(sequences_initial)
-        self.assertEqual(len(self.ga.iter_sequences), self.ga.population_size)
+        self.ga.data.clear_data()
+        seqs = self.ga.init_population(sequences_initial)
+        self.assertEqual(len(self.ga.child_sequences), self.ga.population_size)
 
     def test_generate_mutation_sequence(self):
         sequence = Seq("ATGCKPLQWR")
@@ -127,6 +128,40 @@ class TestGeneticAlgorithm(unittest.TestCase):
         self.assertEqual(mutated_seq, sequence)
         self.assertEqual(old_aa, {})
         self.assertEqual(new_aa, {})
+
+    def check_duplicate_sequences(self):
+        sequence_counts = {}
+        # Count each sequence's occurrences
+        for seq in self.ga.data.sequences:
+            if seq in sequence_counts:
+                sequence_counts[seq] += 1
+            else:
+                sequence_counts[seq] = 1
+        # Check for any sequence that appears more than once
+        for count in sequence_counts.values():
+            if count > 1:
+                return True
+        return False
+
+    def test_generate_child_population(self):
+        sequences_initial = [Seq("ATGCKPLQWR")]
+        seqs = self.ga.init_population(sequences_initial)
+        self.assertEqual(len(seqs), self.ga.population_size)
+        # save seqs in a file
+        with open("seqs.txt", "w") as f:
+            for seq in seqs:
+                f.write(str(seq) + "\n")
+        print("saved")
+        childs = self.ga.generate_child_population(seqs)
+        self.assertEqual(len(childs), self.ga.population_size)
+        duplicate_found = self.check_duplicate_sequences()
+        self.assertFalse(
+            duplicate_found,
+            "No sequence appears more than once in self.ga.data.sequences",
+        )
+
+
+# Usage example
 
 
 if __name__ == "__main__":

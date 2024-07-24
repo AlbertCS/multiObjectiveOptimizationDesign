@@ -41,7 +41,6 @@ class Optimizer:
             else AlgorithmDataSingleton(
                 sequences={},
                 data_frame=pd.DataFrame(columns=["seq_index", "Sequence", "iteration"]),
-                debug=debug,
             )
         )
         if optimizerType not in (OptimizersType):
