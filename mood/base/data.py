@@ -8,7 +8,7 @@ class AlgorithmDataSingleton:
 
     """
     sequences: {"index": "sequence"}
-    data_frame: pd.DataFrame(columns=["seq_index", "Sequence", "iteration", "Metric1", "Metric2", ...])
+    data_frame: pd.DataFrame(columns=["seq_index", "Sequence", "iteration", "mutations", "Metric1", "Metric2", ...])
     TODO look if we want to track the ancestry of the sequences, fathers, grandfathers, etc.
     
     For now, the sequences dictionary will be persistent and the dataFrame will be reset with each iteration.
@@ -77,11 +77,23 @@ class AlgorithmDataSingleton:
     def add_sequence(self, new_sequence) -> bool:
         """Returns True if the sequence was added successfully, False otherwise."""
         if new_sequence in self.sequences.values():
-            logging.warning(f"Sequence {new_sequence} already in the data")
             return False
         else:
             self.sequences[len(self.sequences)] = new_sequence
             return True
+
+    def add_info_df(self, info_dict):
+        """
+        Add information to the data frame in the AlgorithmDataSingleton instance.
+
+        Parameters:
+        info_dict: {"seq_index": int, "Sequence": str, "iteration": int, "mutations": str} - Information to add to the data frame.
+        """
+        to_concat = pd.DataFrame(info_dict, index=[0])
+        self.data_frame = pd.concat(
+            [self.data_frame, to_concat],
+            ignore_index=True,
+        )
 
     def get_data(self):
         return self.sequences, self.data_frame

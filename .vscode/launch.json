@@ -19,6 +19,14 @@
             "program": "${workspaceFolder}/tests/optimizers/test_ga.py",
             "console": "integratedTerminal",
             "justMyCode": false,
+        },
+        {
+            "name": "Test Data",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/base/test_data.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
         }
     ]
 }

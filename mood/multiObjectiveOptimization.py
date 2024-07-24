@@ -10,6 +10,7 @@ import random
 
 import pandas as pd
 from base.data import AlgorithmDataSingleton
+from base.log import Logger
 from metrics import Metric
 from metrics.alphabetic import Alphabet
 from optimizers import GeneticAlgorithm, Optimizer
@@ -95,22 +96,7 @@ class moo:
     ) -> None:
 
         # Define the logger
-        if debug:
-            logging.basicConfig(
-                level=logging.DEBUG,
-                format="%(asctime)s - %(levelname)s - %(message)s",
-                datefmt="%d-%m-%y %H:%M:%S",
-                filemode="w",
-                filename="mood.log",
-            )
-        else:
-            logging.basicConfig(
-                level=logging.INFO,
-                format="%(asctime)s - %(levelname)s - %(message)s",
-                datefmt="%d-%m-%y %H:%M:%S",
-                filemode="w",
-                filename="mood.log",
-            )
+        self.logger = Logger(debug).get_log()
 
         # Initialize the optimizer and metrics
         available_optimizers = ["genetic_algorithm"]
@@ -119,7 +105,7 @@ class moo:
                 f"Optimizer {optimizer} not available. Choose from {available_optimizers}"
             )
         else:
-            
+            pass
         self.optimizer = Optimizer()
         self.metrics = metrics
 
@@ -166,13 +152,15 @@ class moo:
         logging.info("------------------------------------------------")
 
         self.current_iteration = 0
+        parents_sequences = None
 
         if self.current_iteration == self.max_iteration + 1:
             message = "Genetic algorithm has finished running. "
             message += "Increase the number of iterations to continue."
             print(message)
             return
-
+        # TODO save native sequence
+        # TODO save the sequences obtained from the ga to the data.data_frame
         for self.current_iteration in range(self.max_iteration):
             logging.info(f"***Starting iteration {self.current_iteration}***")
             if self.current_iteration == 0:
@@ -183,29 +171,33 @@ class moo:
                 for chain in self.chains:
                     logging.info("Initializing the first population")
                     # Create the initial population
-                    self.optimizer.init_population(seq_chains[chain])
+                    # TODO the sequences must be Seq objects
+                    sequences_to_evaluate = self.optimizer.init_population(
+                        seq_chains[chain]
+                    )
 
             else:
                 # Get the sequences from the optimizer
-                sequences = self.optimizer.get_sequences()
+                if parents_sequences is None:
+                    raise ValueError("No parent sequences found")
+                sequences_to_evaluate = self.optimizer.generate_child_population(
+                    parents_sequences
+                )
 
             # Calculate the metrics
             logging.info("Calculating the metrics")
-            metric_df = pd.DataFrame(sequences, columns=["Sequence"])
+            # TODO add information to the data_frame, iteration, mutations, etc
+            metric_df = pd.DataFrame(sequences_to_evaluate, columns=["Sequence"])
             metric_df.set_index("Sequence", inplace=True)
             for metric in self.metrics:
-                metric_result = metric.calculate(sequences)
+                metric_result = metric.calculate(sequences_to_evaluate)
                 metric_df = metric_df.merge(metric_result, on="Sequence")
 
             # Evaluate the population and rank the individuals
             logging.info("Evaluating and ranking the population")
-            # self.optimizer.eval_population(metric_df)
-            self.optimizer.eval_population()
+            parents_sequences = self.optimizer.eval_population(metric_df)
 
-            # Create the child population
-            logging.info("Creating the child population")
-            self.optimizer.crossOver_mutate()
-
+        # TODO check if the last evaluation is necessary
         logging.info("-------Finishing the optimization process-------")
 
 
