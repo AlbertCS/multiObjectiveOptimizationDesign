@@ -11,6 +11,7 @@
             "program": "${workspaceFolder}/mood/multiObjectiveOptimization.py",
             "console": "integratedTerminal",
             "justMyCode": false,
+            "env": { "PYTHONPATH": "${workspaceRoot}"},
         },
         {
             "name": "Test Ga",
@@ -19,6 +20,7 @@
             "program": "${workspaceFolder}/tests/optimizers/test_ga.py",
             "console": "integratedTerminal",
             "justMyCode": false,
+            "env": { "PYTHONPATH": "${workspaceRoot}"},
         },
         {
             "name": "Test Data",
@@ -27,6 +29,7 @@
             "program": "${workspaceFolder}/tests/base/test_data.py",
             "console": "integratedTerminal",
             "justMyCode": false,
+            "env": { "PYTHONPATH": "${workspaceRoot}"},
         }
     ]
 }

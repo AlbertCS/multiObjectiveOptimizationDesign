@@ -3,9 +3,10 @@ from unittest.mock import MagicMock
 
 from Bio.Seq import Seq
 from icecream import ic
-from pytest_mock import mocker
 
 from mood.optimizers.genetic_algorithm import GeneticAlgorithm
+
+# from optimizers.genetic_algorithm import GeneticAlgorithm
 
 
 class TestGeneticAlgorithm(unittest.TestCase):
@@ -159,6 +160,38 @@ class TestGeneticAlgorithm(unittest.TestCase):
             duplicate_found,
             "No sequence appears more than once in self.ga.data.sequences",
         )
+
+    def test_eval_population(self):
+        import pandas as pd
+
+        data_frame = pd.DataFrame(
+            {
+                "seq_index": [
+                    0,
+                    1,
+                    2,
+                    3,
+                ],
+                "Sequence": [
+                    Seq("ATG"),
+                    Seq("TGA"),
+                    Seq("GAT"),
+                    Seq("PIU"),
+                ],
+                "iteration": [
+                    1,
+                    1,
+                    2,
+                    2,
+                ],
+                "Metric1": [-2, -6, -1, -1],
+                "Metric2": [-1, -6, -1, -3],
+            }
+        )
+
+        sub_data_frame = data_frame[["Metric1", "Metric2"]]
+
+        self.ga.eval_population(sub_data_frame)
 
 
 # Usage example
