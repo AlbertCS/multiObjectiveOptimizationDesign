@@ -236,18 +236,14 @@ class GeneticAlgorithm(Optimizer):
         self.logger.debug(f"  Recombined_sequence: {recombined_sequence}")
         return Seq(recombined_sequence)
 
-    def calculate_pareto_front(self, df, dimension=1):
+    def calculate_pareto_front(self, df, selected_columns, dimension=1):
         """Calculate the Pareto front from a DataFrame for maximization problems."""
-        values = df.values
+        values = df[selected_columns].values
         pareto_front_mask = np.ones(values.shape[0], dtype=bool)
         for i in range(values.shape[0]):
             if pareto_front_mask[
                 i
             ]:  # the dominated will be turned to False so no need to check
-                ic(i)
-                ic(values >= values[i])
-                ic(np.sum((values >= values[i]), axis=1))
-                ic(np.sum((values >= values[i]), axis=1) >= dimension)
                 # dominated_mask = np.sum((values >= values[i]), axis=1) >= dimension
                 dominated_mask = np.sum((values <= values[i]), axis=1) >= dimension
 
@@ -281,52 +277,33 @@ class GeneticAlgorithm(Optimizer):
 
         return df
 
-    def calculate_pareto_front_R(self, df):
-        """Calculate the Pareto front from a DataFrame for maximization problems."""
-        values = df.values
-        num_points = values.shape[0]
-        pareto_front_mask = np.ones(
-            num_points, dtype=bool
-        )  # Initialize all points as non-dominated
-
-        for i in range(num_points):
-            if not pareto_front_mask[i]:  # Skip points already identified as dominated
-                continue
-            # Check if any other point dominates the current point
-            dominated_mask = np.all(values >= values[i], axis=1) & np.any(
-                values > values[i], axis=1
-            )
-
-            # If the current point is dominated by any other point, mark it as False
-            pareto_front_mask[i] = not np.any(dominated_mask)
-
-            # If the current point is not dominated, mark all points it dominates
-            if pareto_front_mask[i]:
-                dominated_by_i_mask = np.all(values <= values[i], axis=1) & np.any(
-                    values < values[i], axis=1
-                )
-                pareto_front_mask[dominated_by_i_mask] = False
-
-        return df[pareto_front_mask]
-
-    def rank_by_pareto(self, df):
+    def rank_by_pareto(self, df, dimension):
         df_to_empty = df.copy()
         df_final = df.copy()
-        df_to_empty = df_to_empty.drop(columns=["Sequence", "iteration", "seq_index"])
 
-        for i in range(len(df)):
-            pareto_front = self.calculate_pareto_front(df_to_empty)
+        df_to_empty = df_to_empty.drop(columns=["Sequence", "iteration", "seq_index"])
+        rank = 1
+        while not df_to_empty.empty:
+            pareto_front = self.calculate_pareto_front(
+                df_to_empty, df_to_empty.columns, dimension
+            )
+
+            # Assign rank to the Pareto front rows
+            df_final.loc[pareto_front.index, "Rank"] = int(rank)
+
+            # Remove the Pareto front rows from df_to_empty
+            df_to_empty = df_to_empty.drop(pareto_front.index)
+
+            rank += 1
+
+        return df_final
 
     def eval_population(self, df, dimension=1):
         self.logger.info("Evaluating the population")
         # Calculate the Pareto front
-        ic(df)
-        pareto_front = self.calculate_pareto_front(df, dimension)
-        # ranks = self.calculate_non_dominated_rank(df)
-        # paret = self.calculate_pareto_front_R(df)
-        ic(pareto_front)
+        ranked_df = self.rank_by_pareto(df, dimension)
 
-        return pareto_front
+        return ranked_df
 
     def generate_child_population(self, parent_sequences, max_attempts=1000):
         self.logger.info("Generating the child population")

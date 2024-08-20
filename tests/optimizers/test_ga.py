@@ -189,9 +189,13 @@ class TestGeneticAlgorithm(unittest.TestCase):
             }
         )
 
-        sub_data_frame = data_frame[["Metric1", "Metric2"]]
+        ranked_df = self.ga.eval_population(data_frame)
 
-        self.ga.eval_population(sub_data_frame)
+        # Assert that the Rank column has the expected values
+        expected_ranks = [2.0, 1.0, 2.0, 2.0]
+        assert (
+            ranked_df["Rank"].tolist() == expected_ranks
+        ), f"Expected ranks {expected_ranks}, but got {ranked_df['Rank'].tolist()}"
 
 
 # Usage example
