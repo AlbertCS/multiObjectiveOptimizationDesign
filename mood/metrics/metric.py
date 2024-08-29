@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 
 
 class Metric:
-    def __init__(self, iteration_folder, data=None):
-        self.data = data
+    def __init__(self):
+        pass
 
     @abstractmethod
     def compute(self):

@@ -13,7 +13,6 @@ class GeneticAlgorithm(Optimizer):
     def __init__(
         self,
         population_size: int = 100,
-        mutation_rate: float = 0.005,
         init_mutation_rate: float = 0.6,
         seed: int = 12345,
         debug: bool = False,
@@ -24,18 +23,13 @@ class GeneticAlgorithm(Optimizer):
     ) -> None:
         super().__init__(
             population_size=population_size,
-            mutation_rate=mutation_rate,
             seed=seed,
             debug=debug,
             data=data,
             optimizerType=OptimizersType.GA,
         )
 
-        # self.population_size = population_size
-        # self.mutation_rate = mutation_rate
-        # # self.seed = seed
-        # self.debug = debug
-        # self.data = data
+        # Number of mutated sequences to generate at the beginning
         self.mutation_seq_percent = mutation_seq_percent
         self.rng = random.Random(seed)
         self.mutable_positions = mutable_positions
@@ -278,6 +272,10 @@ class GeneticAlgorithm(Optimizer):
         return df
 
     def rank_by_pareto(self, df, dimension):
+        """
+        Functions that calculates the pareto front and assigns a rank to each individual in the population.
+        Returns the DataFrame with a new column rank with the rank of each individual.
+        """
         df_to_empty = df.copy()
         df_final = df.copy()
 
@@ -299,13 +297,21 @@ class GeneticAlgorithm(Optimizer):
         return df_final
 
     def eval_population(self, df, dimension=1):
+        """
+        Evaluates the population to identify the parent population for the next generation.
+        Returns the DataFrame with a the rank in a new column.
+        """
         self.logger.info("Evaluating the population")
         # Calculate the Pareto front
         ranked_df = self.rank_by_pareto(df, dimension)
 
         return ranked_df
 
-    def generate_child_population(self, parent_sequences, max_attempts=1000):
+    # TODO implement the following sort: https://github.com/smkalami/nsga2-in-python/blob/main/nsga2.py
+
+    def generate_child_population(
+        self, parent_sequences, max_attempts=1000, mutation_rate=0.06
+    ):
         self.logger.info("Generating the child population")
         # Initialize the child population list
         self.child_sequences = []
@@ -341,7 +347,7 @@ class GeneticAlgorithm(Optimizer):
             if n_tries > max_attempts and not added:
                 mutated_sequence = self.generate_mutation_sequence(
                     sequence_to_mutate=crossover_sequence,
-                    mutation_rate=self.mutation_rate,
+                    mutation_rate=mutation_rate,
                 )
                 n_tries = 0
                 added = self.data.add_sequence(mutated_sequence)
@@ -351,7 +357,7 @@ class GeneticAlgorithm(Optimizer):
                     )
                     mutated_sequence = self.generate_mutation_sequence(
                         sequence_to_mutate=crossover_sequence,
-                        mutation_rate=self.mutation_rate,
+                        mutation_rate=mutation_rate,
                     )
                     added = self.data.add_sequence(mutated_sequence)
                     if n_tries > max_attempts:

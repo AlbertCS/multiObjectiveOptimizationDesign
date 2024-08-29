@@ -25,14 +25,14 @@ class Optimizer:
     def __init__(
         self,
         population_size=100,
-        mutation_rate=0.005,
         seed=12345,
         debug=False,
         data=None,
         optimizerType: OptimizersType = OptimizersType.GA,
+        mutable_positions=None,
+        mutable_aa=None,
     ):
         self.population_size = population_size
-        self.mutation_rate = mutation_rate
         self.seed = seed
         self.debug = debug
         self.data = (

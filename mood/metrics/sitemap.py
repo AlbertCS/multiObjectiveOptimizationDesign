@@ -4,9 +4,9 @@ import time
 import pandas as pd
 
 # TODO may have to remove the relative import
-from base import Silent
-from metrics import Metric
-from metrics.utils import _copy_script_file, _parallel
+from mood.base import Silent
+from mood.metrics import Metric
+from mood.metrics.utils import _copy_script_file, _parallel
 
 
 class Sitemap(Metric):

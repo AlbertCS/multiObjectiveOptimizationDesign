@@ -8,7 +8,7 @@
             "name": "Test Moo",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/mood/multiObjectiveOptimization.py",
+            "program": "${workspaceFolder}/tests/test_moo.py",
             "console": "integratedTerminal",
             "justMyCode": false,
             "env": { "PYTHONPATH": "${workspaceRoot}"},
