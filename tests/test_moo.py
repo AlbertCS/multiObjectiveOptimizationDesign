@@ -1,4 +1,5 @@
 import os
+import pickle
 import shutil
 import unittest
 from unittest.mock import MagicMock
@@ -18,6 +19,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         metrics = [Alphabet()]
         debug = True
         max_iteration = 5
+        population_size = 5
         seed = 1235
         pdb = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/7R1K.pdb"
         chains = ["A"]
@@ -40,7 +42,6 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
                 184: ["K", "Q", "A", "R"],
             }
         }
-
         folder_name = "mood_job"
         self.moo = MultiObjectiveOptimization(
             optimizer=optimizer,
@@ -54,6 +55,8 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             mutable_aa=mutable_aa,
             folder_name=folder_name,
             seed=seed,
+            population_size=population_size,
+            offset=4,
         )
         if os.path.exists("mood_job"):
             shutil.rmtree("mood_job")
@@ -73,18 +76,80 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         self.moo.check_previous_iterations()
         self.assertTrue(self.moo.data.iteration == 0)
 
-    def test_check_previous_iterations_none(self):
+    def test_check_iter_finished(self):
+        sequences = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/sequences.pkl"
+        dataframe = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/data_frame.pkl"
+        finished = self.moo.check_Iter_finished(
+            iteration=0, sequences_pkl=sequences, dataframe_pkl=dataframe
+        )
+        self.assertEqual(finished, True)
+
+    def test_check_previous_iterations(self):
         if os.path.exists("mood_job/000"):
             shutil.rmtree("mood_job/000")
         else:
             os.mkdir("mood_job")
         os.mkdir("mood_job/000")
-        with open("mood_job/000/sequences.pkl", "w") as f:
-            f.write("")
-        with open("mood_job/000/parent_seq.pkl", "w") as f:
-            f.write("")
-        self.moo.check_previous_iterations()
-        self.assertTrue(self.moo.data.iteration == 0)
+        shutil.copy(
+            "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/sequences.pkl",
+            "mood_job/000/sequences.pkl",
+        )
+        shutil.copy(
+            "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/data_frame.pkl",
+            "mood_job/000/data_frame.pkl",
+        )
+        finished, dataframe = self.moo.check_previous_iterations()
+        self.assertTrue(self.moo.current_iteration == 1)
+
+    def test_check_previous_iterations_none(self):
+        if not os.path.exists("mood_job"):
+            os.mkdir("mood_job")
+        if os.path.exists("mood_job/000"):
+            shutil.rmtree("mood_job/000")
+
+        _, _ = self.moo.check_previous_iterations()
+        self.assertTrue(self.moo.current_iteration == 0)
+
+    def test_save_iteration(self):
+        sequences = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/sequences.pkl"
+        dataframe = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/data_frame.pkl"
+        current_iteration = 1
+        with open(sequences, "rb") as f:
+            sequences = pickle.load(f)
+        with open(dataframe, "rb") as f:
+            dataframe = pickle.load(f)
+        if not os.path.exists("mood_job"):
+            os.mkdir("mood_job")
+        if not os.path.exists("mood_job/001"):
+            os.mkdir("mood_job/001")
+        self.moo.save_iteration(current_iteration, sequences, dataframe)
+        seq1 = "mood_job/001/sequences.pkl"
+        df1 = "mood_job/001/data_frame.pkl"
+        self.assertTrue(os.path.exists(seq1))
+        self.assertTrue(os.path.exists(df1))
+
+    def test_setup_folders_iter(self):
+        if not os.path.exists("mood_job"):
+            os.mkdir("mood_job")
+        self.moo.setup_folders_iter(current_iteration=2)
+        self.assertTrue(os.path.exists("mood_job/002"))
+
+    def test_save_load_info(self):
+        if not os.path.exists("mood_job"):
+            os.mkdir("mood_job")
+        if not os.path.exists("mood_job/input"):
+            os.mkdir("mood_job/input")
+        seq_native = "HNPVVMVHGMGGASYNFASIKSYLVTQGWDRNQLFAIDFIDKTGNNRNNGPRLSRFVKDVLGKTGAKKVDIVAHSMGGANTLYYIKNLDGGDKIENVVTLGGANGLVSLRALPGTDPNQKILYTSVYSSADMIVVNSLSRLIGARNVLIHGVGHISLLASSQVKGYIKEGLNGGGQNTNLE"
+
+        self.moo.save_info(seq=seq_native)
+        self.assertTrue(os.path.exists("mood_job/input/info.pkl"))
+
+        self.moo.load_info()
+        self.assertEqual(self.moo.native_sequence, seq_native)
+
+    def test_run(self):
+        self.moo.run()
+        self.assertTrue(os.path.exists("mood_job/000"))
 
 
 if __name__ == "__main__":

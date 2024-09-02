@@ -39,7 +39,7 @@ class GeneticAlgorithm(Optimizer):
         self.child_sequences = []
         self.crossoverTypes = ["uniform", "two_point", "single_point"]
 
-    def init_population(self, sequences_initial):
+    def init_population(self, chain, sequences_initial):
         self.logger.info("Initializing the population")
         # Initial checks
         if sequences_initial is None:
@@ -56,7 +56,7 @@ class GeneticAlgorithm(Optimizer):
         try:
             # Adding the initial sequences to the population
             for sequence in sequences_initial:
-                self.data.add_sequence(sequence)
+                self.data.add_sequence(chain, sequence)
                 self.child_sequences.append(sequence)
 
             # Getting the number of missing sequences
@@ -82,18 +82,18 @@ class GeneticAlgorithm(Optimizer):
                     sequence_to_start_from = self.rng.choice(self.child_sequences)
 
                     mutated_sequence, _, _ = self.generate_mutation_sequence(
-                        sequence_to_start_from, self.init_mutation_rate
+                        sequence_to_start_from, self.init_mutation_rate, chain
                     )
                     # Add the new sequence to the data object and iter_sequences
-                    added = self.data.add_sequence(mutated_sequence)
+                    added = self.data.add_sequence(chain, mutated_sequence)
                     while not added:
                         self.logger.warning(
                             f"Sequence {mutated_sequence} already in the data, generating a new one"
                         )
                         mutated_sequence, _, _ = self.generate_mutation_sequence(
-                            sequence_to_start_from, self.init_mutation_rate
+                            sequence_to_start_from, self.init_mutation_rate, chain
                         )
-                        added = self.data.add_sequence(mutated_sequence)
+                        added = self.data.add_sequence(chain, mutated_sequence)
                     self.child_sequences.append(mutated_sequence)
 
                     self.logger.debug(
@@ -115,7 +115,7 @@ class GeneticAlgorithm(Optimizer):
                         sequences_pool=self.child_sequences
                     )
                     # Add the new sequence to the data object
-                    added = self.data.add_sequence(crossover_sequence)
+                    added = self.data.add_sequence(chain, crossover_sequence)
                     while not added:
                         self.logger.warning(
                             f"Sequence {crossover_sequence} already in the data, generating a new one"
@@ -123,11 +123,11 @@ class GeneticAlgorithm(Optimizer):
                         crossover_sequence = self.generate_crossover_sequence(
                             sequences_pool=self.child_sequences
                         )
-                        added = self.data.add_sequence(crossover_sequence)
+                        added = self.data.add_sequence(chain, crossover_sequence)
                     self.child_sequences.append(crossover_sequence)
-                    self.logger.debug(
-                        f"Child sequences after generate crossover: \n  {self.child_sequences}"
-                    )
+                    # self.logger.debug(
+                    #     f"Child sequences after generate crossover: \n  {self.child_sequences}"
+                    # )
                     number_of_sequences = len(self.child_sequences)
                     self.logger.debug(f"Population size: {number_of_sequences}")
 
@@ -135,7 +135,7 @@ class GeneticAlgorithm(Optimizer):
         except Exception as e:
             self.logger.error(f"Error initializing the population: {e}")
 
-    def generate_mutation_sequence(self, sequence_to_mutate, mutation_rate):
+    def generate_mutation_sequence(self, sequence_to_mutate, mutation_rate, chain):
         self.logger.debug("Generating a mutant sequence")
         if not self.mutable_positions:
             self.logger.error("No mutable positions provided")
@@ -149,14 +149,14 @@ class GeneticAlgorithm(Optimizer):
         mutable_seq = MutableSeq(sequence_to_mutate)
         self.logger.debug(f"Sequence_to_mutate: {sequence_to_mutate}")
         # Iterate over the aa in the mutable sequence
-        for i, aa in enumerate(mutable_seq, start=1):
+        for i, aa in enumerate(mutable_seq, start=0):
             # If the position is mutable and the mutation rate is met
             if (
-                i in self.mutable_positions
-                and i in self.mutable_aa
+                i in self.mutable_positions[chain]
+                and i in self.mutable_aa[chain]
                 and self.rng.random() <= mutation_rate
             ):
-                new_residues = [nuc for nuc in self.mutable_aa[i] if nuc != aa]
+                new_residues = [nuc for nuc in self.mutable_aa[chain][i] if nuc != aa]
                 old_aa[i] = aa
                 new_aa[i] = self.rng.choice(new_residues)
                 mutable_seq[i - 1] = new_aa[i]
@@ -197,9 +197,9 @@ class GeneticAlgorithm(Optimizer):
         for i, aa in enumerate(sequence2, start=1):
             if i in self.mutable_positions and self.rng.random() < 0.5:
                 recombined_sequence[i - 1] = aa
-        self.logger.debug(f"Initial_sequences: 1.{sequence1}")
-        self.logger.debug(f"Initial_sequences: 2.{sequence2}")
-        self.logger.debug(f"  Recombined_sequence: {recombined_sequence}")
+        # self.logger.debug(f"Initial_sequences: 1.{sequence1}")
+        # self.logger.debug(f"Initial_sequences: 2.{sequence2}")
+        # self.logger.debug(f"  Recombined_sequence: {recombined_sequence}")
         return Seq(recombined_sequence)
 
     def two_point_crossover(self, sequence1, sequence2, start=None, end=None) -> Seq:

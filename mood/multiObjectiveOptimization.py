@@ -5,7 +5,6 @@
 """
 
 import argparse
-import logging
 import os
 import pickle
 import random
@@ -102,6 +101,7 @@ class MultiObjectiveOptimization:
         folder_name="mood_job",
         mutable_aa=None,
         population_size=100,
+        offset=None,
     ) -> None:
 
         # Define the logger
@@ -109,17 +109,38 @@ class MultiObjectiveOptimization:
 
         self.metrics = metrics
         self.max_iteration = max_iteration
+        self.seed = seed
         random.seed(seed)
         self.pdb = pdb
         self.chains = chains
-        self.data = data
+        if data is None:
+            self.data = AlgorithmDataSingleton()
+            self.data.chains = chains
+        else:
+            self.data = data
         self.mutation_rate = {}
-        self.mutable_positions = mutable_positions
+
         self.folder_name = folder_name
-        self.mutable_aa = mutable_aa
+
         self.folders = {}
         self.current_iteration = 0
+        self.population_size = population_size
+        self.sequences = {chain: [] for chain in self.chains}
+        self.sequences_file_name = "sequences.pkl"
+        self.data_frame_file_name = "data_frame.pkl"
 
+        if offset is None:
+            self.mutable_positions = mutable_positions
+            self.mutable_aa = mutable_aa
+        else:
+            self.mutable_positions = {
+                chain: [pos - offset for pos in positions]
+                for chain, positions in mutable_positions.items()
+            }
+            self.mutable_aa = {
+                chain: {pos - 4: aa for pos, aa in positions.items()}
+                for chain, positions in mutable_aa.items()
+            }
         if isinstance(chains, str):
             self.chains = [chains]
         elif isinstance(chains, list):
@@ -142,8 +163,8 @@ class MultiObjectiveOptimization:
                     seed=seed,
                     debug=debug,
                     data=data,
-                    mutable_positions=mutable_positions,
-                    mutable_aa=mutable_aa,
+                    mutable_positions=self.mutable_positions,
+                    mutable_aa=self.mutable_aa,
                 )
 
     def _get_seq_from_pdb(self, structure_id="initial_structure", pdb_file=None):
@@ -167,10 +188,6 @@ class MultiObjectiveOptimization:
 
         shutil.copy(self.pdb, self.folders["input"])
 
-    def setup_folders(self, current_iteration):
-
-        pass
-
     def check_Iter_finished(self, iteration, sequences_pkl, dataframe_pkl):
         """
         Checks if the iteration is finished by checking if the sequences.pkl and data_frame.csv files are
@@ -180,11 +197,11 @@ class MultiObjectiveOptimization:
         """
         # Check the sequences.pkl file
         if not os.path.exists(sequences_pkl):
-            logging.error(f"File {sequences_pkl} not found")
+            self.logger.error(f"File {sequences_pkl} not found")
             raise ValueError(f"File {sequences_pkl} not found")
         # Check if the sequences.pkl file is empty
         elif os.path.getsize(sequences_pkl) == 0:
-            logging.error(f"File {sequences_pkl} is empty")
+            self.logger.error(f"File {sequences_pkl} is empty")
             raise ValueError(f"File {sequences_pkl} is empty")
         # Read the sequences.pkl file to check if has the correct number of sequences
         else:
@@ -192,49 +209,57 @@ class MultiObjectiveOptimization:
                 sequences = pickle.load(f)
                 for chain in self.chains:
                     if len(sequences[chain]) != self.population_size:
-                        logging.error(
+                        self.logger.error(
                             f"The number of sequences in the {iteration} doesn't reach the population size"
                         )
 
         # Check the data_frame.csv file
         if not os.path.exists(dataframe_pkl):
-            logging.error(f"File {dataframe_pkl} not found")
+            self.logger.error(f"File {dataframe_pkl} not found")
             raise ValueError(f"File {dataframe_pkl} not found")
         # Check if the data_frame.csv file is empty
         elif os.path.getsize(dataframe_pkl) == 0:
-            logging.error(f"File {dataframe_pkl} is empty")
+            self.logger.error(f"File {dataframe_pkl} is empty")
             raise ValueError(f"File {dataframe_pkl} is empty")
         else:
-            # TODO if that works
             with open(dataframe_pkl, "rb") as f:
-                sequences = pickle.load(f)
+                dataframe_iter = pickle.load(f)
                 for chain in self.chains:
-                    data_frame = pd.DataFrame(sequences[chain])
+                    data_frame = pd.DataFrame(dataframe_iter[chain])
                     # Get the rows of the dataFrame and check if the number of sequences is correct
                     if data_frame.shape[0] != self.population_size:
-                        logging.error(
-                            f"The number of sequences in the {iteration} doesn't reach the population size"
+                        self.logger.error(
+                            f"The number of sequences in the dataframe {iteration} doesn't reach the population size"
                         )
         return True
 
     def check_previous_iterations(self):
-        sequences = {}
+        """
+        Check if the results files exists for the previous iterations.
+        For each iterations accumulate the sequences, and load the last df.
+        Returns if the algorithm is finished, the total sequences, and the dataframe of the last iteration.
+        Also updates the current_iteration attribute.
+        """
+        data_frame = {}
+        # Check if the folder exists for the current iteration
         while os.path.exists(
             self.folder_name + "/" + str(self.current_iteration).zfill(3)
         ):
-            logging.info(f"Iteration {self.current_iteration} data found")
+            self.logger.info(f"Iteration {self.current_iteration} data found")
             # Create the paths to the sequences.pkl and data_frame.csv
             sequences_pkl = (
                 self.folder_name
                 + "/"
                 + str(self.current_iteration).zfill(3)
-                + "/sequences.pkl"
+                + "/"
+                + self.sequences_file_name
             )
             dataframe_pkl = (
                 self.folder_name
                 + "/"
                 + str(self.current_iteration).zfill(3)
-                + "/data_frame.pkl"
+                + "/"
+                + self.data_frame_file_name
             )
             # See if the iteration is finished
             finished = self.check_Iter_finished(
@@ -242,97 +267,186 @@ class MultiObjectiveOptimization:
             )
             if finished:
                 # Load the sequences
-
+                # TODO we are loading the sequences in two points, here and in check_Iter_finished
+                # TODO see if can be optimized to only one load.
                 with open(sequences_pkl, "rb") as f:
-                    sequences_iter = f.readlines()
-
-                sequences = {**sequences, **sequences_iter}
+                    sequences_iter = pickle.load(f)
+                for chain in self.chains:
+                    self.sequences[chain].extend(sequences_iter[chain])
                 self.current_iteration += 1
 
                 continue
+        dataframe_pkl = (
+            self.folder_name
+            + "/"
+            + str(self.current_iteration).zfill(3)
+            + "/"
+            + self.data_frame_file_name
+        )
+        if os.path.exists(dataframe_pkl):
+            with open(dataframe_pkl, "rb") as f:
+                sequences = pickle.load(f)
+                data_frame = {}
+                for chain in self.chains:
+                    data_frame[chain] = pd.DataFrame(sequences[chain])
+                    # Get the rows of the dataFrame and check if the number of sequences is correct
 
-        return sequences
+        # Send the sequences to the data class
+        self.data.sequences = self.sequences
 
-    def save_iteration(self, parents_sequences):
+        # Return if finished, the total sequences, and the dataframe of the last iteration.
+        if self.current_iteration < self.max_iteration:
+            return False, data_frame
+        else:
+            return True, data_frame
+
+    def save_iteration(self, current_iteration, sequences, dataframe):
         try:
             with open(
                 self.folder_name
                 + "/"
-                + str(self.current_iteration).zfill(3)
-                + "/sequences.pkl",
+                + str(current_iteration).zfill(3)
+                + "/"
+                + self.sequences_file_name,
                 "wb",
             ) as f:
-                f.write(parents_sequences)
+                pickle.dump(sequences, f)
         except:
-            logging.error(
-                f"Error saving the sequences and data_frame from iteration {self.current_iteration}"
+            self.logger.error(
+                f"Error saving the sequences from iteration {current_iteration}"
             )
             raise ValueError(
-                f"Error saving the sequences and data_frame from iteration {self.current_iteration}"
+                f"Error saving the sequences from iteration {current_iteration}"
             )
+        try:
+            with open(
+                self.folder_name
+                + "/"
+                + str(current_iteration).zfill(3)
+                + "/"
+                + self.data_frame_file_name,
+                "wb",
+            ) as f:
+                pickle.dump(dataframe, f)
+        except:
+            self.logger.error(
+                f"Error saving the data_frame from iteration {current_iteration}"
+            )
+            raise ValueError(
+                f"Error saving the data_frame from iteration {current_iteration}"
+            )
+
+    def select_parents(sequences_eval_df, percent_of_parents=0.25):
+        # sort by rank, keep the 25% of the sequences as parents
+        sequences_ranked = sequences_eval_df.sort_values(by="Rank")
+        top = sequences_ranked.head(int(len(sequences_ranked) * percent_of_parents))
+        return top["Sequence"]
+
+    def setup_folders_iter(self, current_iteration):
+        if not os.path.exists(self.folder_name + "/" + str(current_iteration).zfill(3)):
+            os.mkdir(self.folder_name + "/" + str(current_iteration).zfill(3))
+
+    def save_info(self, seq):
+        info = {
+            "native_sequence": seq,
+            "chains": self.chains,
+            "seed": self.seed,
+            "mutation_rate": self.mutation_rate,
+            "mutable_positions": self.mutable_positions,
+            "mutable_aa": self.mutable_aa,
+            "population_size": self.population_size,
+        }
+        with open(
+            self.folder_name + "/input/info.pkl",
+            "wb",
+        ) as f:
+            pickle.dump(info, f)
+
+    def load_info(self):
+        with open(
+            self.folder_name + "/input/info.pkl",
+            "rb",
+        ) as f:
+            info = pickle.load(f)
+        self.native_sequence = info["native_sequence"]
+        self.chains = info["chains"]
+        self.seed = info["seed"]
+        self.mutation_rate = info["mutation_rate"]
+        self.mutable_positions = info["mutable_positions"]
+        self.mutable_aa = info["mutable_aa"]
+        self.population_size = info["population_size"]
 
     def run(self):
 
         # Run the optimization process
-        logging.info("-------Starting the optimization process-------")
-        logging.info("\tOptimizer: " + self.optimizer.__class__.__name__)
-        logging.info(
+        self.logger.info("-------Starting the optimization process-------")
+        self.logger.info("\tOptimizer: " + self.optimizer.__class__.__name__)
+        self.logger.info(
             "\tMetrics: "
             + ", ".join([metric.__class__.__name__ for metric in self.metrics])
         )
-        logging.info("\tMax Iteration: " + str(self.max_iteration))
-        logging.info("\tSeed: " + str(self.seed))
-        logging.info("------------------------------------------------")
+        self.logger.info("\tMax Iteration: " + str(self.max_iteration))
+        self.logger.info("\tSeed: " + str(self.seed))
+        self.logger.info("------------------------------------------------")
 
         self.current_iteration = 0
         parents_sequences = None
 
-        # TODO if we start from a previous execution
-        # Get the sequences, the chains, iterations
-        # _, _ = self.check_previous_iterations()
-        sequences_to_evaluate = {}
-        self.chains = []
-
-        if self.current_iteration == self.max_iteration + 1:
+        # Get if the algorithm is finished, total_sequences, and the dataframe of the last iterations
+        finished, sequences_eval_df = self.check_previous_iterations()
+        if finished:
+            self.logger.info(
+                "Genetic algorithm has finished running. Increase the number of iterations to continue"
+            )
             message = "Genetic algorithm has finished running. "
             message += "Increase the number of iterations to continue."
             print(message)
-            return
-        # TODO save native sequence
-        # TODO save the sequences obtained from the ga to the data.data_frame
+            return 0
+        if self.current_iteration != 0:
+            self.load_info()
+
+        sequences_to_evaluate = {}
+
         for self.current_iteration in range(self.max_iteration):
-            logging.info(f"***Starting iteration {self.current_iteration}***")
+            self.logger.info(f"***Starting iteration {self.current_iteration}***")
 
             if self.current_iteration == 0:
-                logging.info("Setting up the folders")
-                self.setup_folders(self.current_iteration)
-                logging.debug("Reading the input pdb")
+                self.logger.info("Setting up the folders")
+                # Setup folders for the initial iteration
+                self.setup_folders_initial()
+                self.setup_folders_iter(self.current_iteration)
+                self.logger.debug("Reading the input pdb")
                 # Read the pdb file and get the sequences by chain
                 seq_chains = self._get_seq_from_pdb(pdb_file=self.pdb)
+                # TODO check if chains in seq_chains and self.chains are the same
                 # For each chain, initialize the population
                 for chain in self.chains:
-                    logging.info("Initializing the first population")
+                    self.logger.info("Initializing the first population")
                     # Create the initial population
                     # TODO the sequences must be Seq objects
                     sequences_to_evaluate[chain] = self.optimizer.init_population(
-                        seq_chains[chain]
+                        chain, seq_chains[chain]
                     )
 
+                self.native_sequence = seq_chains
+                self.save_info(seq_chains)
+
             else:
+                self.setup_folders_iter(self.current_iteration)
                 # Get the sequences from the optimizer
-                if parents_sequences is None:
-                    raise ValueError("No parent sequences found")
                 for chain in self.chains:
-                    logging.info("Generating the child population")
+                    # Select the parent sequences
+                    parents_sequences = self.select_parents(sequences_eval_df[chain])
+                    self.logger.info("Generating the child population")
                     sequences_to_evaluate[chain] = (
                         self.optimizer.generate_child_population(
-                            parents_sequences[chain],
+                            parents_sequences,
                             self.mutable_positions[chain],
                         )
                     )
 
             # Calculate the metrics
-            logging.info("Calculating the metrics")
+            self.logger.info("Calculating the metrics")
             # TODO add information to the data_frame, iteration, mutations, etc
             for chain in self.chains:
                 parents_sequences = {}
@@ -342,22 +456,22 @@ class MultiObjectiveOptimization:
                 )
                 metric_df.set_index("Sequence", inplace=True)
                 for metric in self.metrics:
-                    metric_result = metric.calculate(sequences_to_evaluate)
+                    metric_result = metric.compute(sequences_to_evaluate)
                     metric_df = metric_df.merge(metric_result, on="Sequence")
 
                 # Evaluate the population and rank the individuals
-                logging.info("Evaluating and ranking the population")
+                self.logger.info("Evaluating and ranking the population")
                 # Returns a dataframe with the sequences and the metrics, and a column with the rank
                 sequences_eval_df[chain] = self.optimizer.eval_population(metric_df)
-                # TODO select the parent population from the sequences_eval_df
 
-                # TODO save the parents_sequences[chain] and metric_df as a csv:chain
-
+            # TODO save the sequences to the data class, to accumulate the sequences
             # Save the sequences and the data_frame
-            # self.save_iteration(parents_sequences)
+            self.save_iteration(
+                self.current_iteration, sequences_to_evaluate, sequences_eval_df
+            )
+            self.current_iteration += 1
 
-        # TODO check if the last evaluation is necessary
-        logging.info("-------Finishing the optimization process-------")
+        self.logger.info("-------Finishing the optimization process-------")
 
 
 if __name__ == "__main__":

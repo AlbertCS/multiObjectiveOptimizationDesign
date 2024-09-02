@@ -28,3 +28,5 @@ class Alphabet(Metric):
             df.loc[df["Sequence"] == sequence, "Alphabetical Score"] = (
                 self.alphabetical_order_score(sequence)
             )
+
+        return df
