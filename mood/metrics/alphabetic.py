@@ -10,11 +10,9 @@ class Alphabet(Metric):
         Calculate a score that reflects how close the list of strings is to being in alphabetical order.
         The score is based on the number of inversions.
         """
-        import jellyfish
-
-        sorted_sequence = sorted(sequence)
-        score = jellyfish.jaro_similarity(sequence, sorted_sequence)
-
+        score = 0
+        for i in range(1, len(sequence)):
+            score += abs(ord(sequence[i]) - ord(sequence[i - 1]))
         return score
 
     def compute(self, sequences):

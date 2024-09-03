@@ -40,7 +40,7 @@ class Optimizer:
             if data is not None
             else AlgorithmDataSingleton(
                 sequences={},
-                data_frame=pd.DataFrame(columns=["seq_index", "Sequence", "iteration"]),
+                chains=[],
             )
         )
         if optimizerType not in (OptimizersType):

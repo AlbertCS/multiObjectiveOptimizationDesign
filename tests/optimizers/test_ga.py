@@ -11,24 +11,48 @@ from mood.optimizers.genetic_algorithm import GeneticAlgorithm
 
 class TestGeneticAlgorithm(unittest.TestCase):
     def setUp(self):
+        self.seq_ini = "HNPVVMVHGMGGASYNFASIKSYLVTQGWDRNQLFAIDFIDKTGNNRNNGPRLSRFVKDVLGKTGAKKVDIVAHSMGGANTLYYIKNLDGGDKIENVVTLGGANGLVSLRALPGTDPNQKILYTSVYSSADMIVVNSLSRLIGARNVLIHGVGHISLLASSQVKGYIKEGLNGGGQNTNLE"
         self.ga = GeneticAlgorithm(
             population_size=10,
-            mutable_positions=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            mutable_positions={
+                "A": [34, 36, 55, 66, 70, 113, 120, 121, 122, 155, 156, 184]
+            },
             mutable_aa={
-                1: ["A", "P", "S"],
-                2: ["M"],
-                3: ["T", "S", "A", "C"],
-                4: ["A", "G", "F"],
-                6: ["A", "G", "T", "S", "A", "C"],
-                7: ["W", "R", "Q", "K", "P", "L"],
-                10: ["L", "N", "H", "V"],
+                "A": {
+                    34: ["H", "D", "Q", "S", "K", "M", "F", "L", "T", "A", "C"],
+                    36: ["R", "E", "D", "K", "A", "M", "S", "H", "L"],
+                    55: ["A", "Q", "E", "M", "L", "V", "C", "D", "K", "S", "F"],
+                    66: ["Q", "R", "E", "A", "M", "L", "S", "F", "H"],
+                    70: [
+                        "Q",
+                        "D",
+                        "S",
+                        "H",
+                        "T",
+                        "M",
+                        "A",
+                        "F",
+                        "R",
+                        "N",
+                        "V",
+                        "C",
+                        "E",
+                    ],
+                    113: ["E", "D", "H", "Q", "S", "A", "C", "K", "N", "T", "V", "M"],
+                    120: ["S", "D", "H", "Q", "T", "C", "G", "A", "R", "K"],
+                    121: ["D", "S", "H", "T", "C", "V", "Y", "K", "Q", "F"],
+                    122: ["S", "H", "D", "K", "M", "R", "T", "A"],
+                    155: ["L", "C", "F", "M", "S", "A", "H", "I", "T"],
+                    156: ["H", "S", "T", "C", "D", "V"],
+                    184: ["K", "Q", "A", "R"],
+                }
             },
             seed=12345,
             debug=True,
         )
 
     def test_init_population(self):
-        sequences_initial = [Seq("ATGCKPLQWR")]
+        sequences_initial = [Seq(self.seq_ini)]
         self.ga.data.clear_data()
         seqs = self.ga.init_population(sequences_initial)
         self.assertEqual(len(self.ga.child_sequences), self.ga.population_size)

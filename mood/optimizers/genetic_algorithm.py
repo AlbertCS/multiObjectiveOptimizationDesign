@@ -56,8 +56,8 @@ class GeneticAlgorithm(Optimizer):
         try:
             # Adding the initial sequences to the population
             for sequence in sequences_initial:
-                self.data.add_sequence(chain, sequence)
-                self.child_sequences.append(sequence)
+                self.data.add_sequence(chain, Seq(sequence))
+                self.child_sequences.append(Seq(sequence))
 
             # Getting the number of missing sequences
             n_missing = self.population_size - len(self.child_sequences)
@@ -112,7 +112,7 @@ class GeneticAlgorithm(Optimizer):
                     )
                     # Get two random sequences to crossover
                     crossover_sequence = self.generate_crossover_sequence(
-                        sequences_pool=self.child_sequences
+                        sequences_pool=self.child_sequences, chain=chain
                     )
                     # Add the new sequence to the data object
                     added = self.data.add_sequence(chain, crossover_sequence)
@@ -121,7 +121,7 @@ class GeneticAlgorithm(Optimizer):
                             f"Sequence {crossover_sequence} already in the data, generating a new one"
                         )
                         crossover_sequence = self.generate_crossover_sequence(
-                            sequences_pool=self.child_sequences
+                            sequences_pool=self.child_sequences, chain=chain
                         )
                         added = self.data.add_sequence(chain, crossover_sequence)
                     self.child_sequences.append(crossover_sequence)
@@ -169,6 +169,7 @@ class GeneticAlgorithm(Optimizer):
         sequence2=None,
         crossover_type="uniform",
         sequences_pool=None,
+        chain=None,
     ) -> Seq:
         # If no sequence were given, select two random sequences
         if sequence1 is None and sequence2 is None:
@@ -189,14 +190,14 @@ class GeneticAlgorithm(Optimizer):
         elif crossover_type == "single_point":
             return self.single_point_crossover(sequence1, sequence2)
         else:
-            return self.uniform_crossover(sequence1, sequence2)
+            return self.uniform_crossover(sequence1, sequence2, chain)
 
-    def uniform_crossover(self, sequence1, sequence2) -> Seq:
+    def uniform_crossover(self, sequence1, sequence2, chain, percent_recomb=0.3) -> Seq:
         self.logger.debug("Performing a uniform crossover")
         recombined_sequence = MutableSeq(sequence1)
-        for i, aa in enumerate(sequence2, start=1):
-            if i in self.mutable_positions and self.rng.random() < 0.5:
-                recombined_sequence[i - 1] = aa
+        for i in self.mutable_positions[chain]:
+            if self.rng.random() < percent_recomb:
+                recombined_sequence[i - 1] = sequence2[i - 1]
         # self.logger.debug(f"Initial_sequences: 1.{sequence1}")
         # self.logger.debug(f"Initial_sequences: 2.{sequence2}")
         # self.logger.debug(f"  Recombined_sequence: {recombined_sequence}")
@@ -279,7 +280,7 @@ class GeneticAlgorithm(Optimizer):
         df_to_empty = df.copy()
         df_final = df.copy()
 
-        df_to_empty = df_to_empty.drop(columns=["Sequence", "iteration", "seq_index"])
+        df_to_empty = df_to_empty.drop(columns=["Sequence"])
         rank = 1
         while not df_to_empty.empty:
             pareto_front = self.calculate_pareto_front(
@@ -310,13 +311,24 @@ class GeneticAlgorithm(Optimizer):
     # TODO implement the following sort: https://github.com/smkalami/nsga2-in-python/blob/main/nsga2.py
 
     def generate_child_population(
-        self, parent_sequences, max_attempts=1000, mutation_rate=0.06
+        self,
+        parent_sequences,
+        max_attempts=1000,
+        mutation_rate=0.06,
+        chain=None,
     ):
         self.logger.info("Generating the child population")
         # Initialize the child population list
         self.child_sequences = []
         number_of_sequences = len(self.child_sequences)
         n_tries = 0
+        if len(parent_sequences) < 2:
+            self.logger.error(
+                "Not enough parent sequences to generate a child population"
+            )
+            raise ValueError(
+                "Not enough parent sequences to generate a child population"
+            )
         mutated_sequence = None
         # Adding sequences by crossover til the desired population size is reached
         while number_of_sequences < self.population_size:
@@ -325,18 +337,20 @@ class GeneticAlgorithm(Optimizer):
             )
             # Crossover
             crossover_sequence = self.generate_crossover_sequence(
-                sequences_pool=parent_sequences
+                sequences_pool=parent_sequences, chain=chain
             )
             # Add the new sequence to the data object
-            added = self.data.add_sequence(crossover_sequence)
+            added = self.data.add_sequence(chain=chain, new_sequence=crossover_sequence)
             while not added:
                 self.logger.warning(
                     f"Sequence {crossover_sequence} already in the data, generating a new one"
                 )
                 crossover_sequence = self.generate_crossover_sequence(
-                    sequences_pool=parent_sequences
+                    sequences_pool=parent_sequences, chain=chain
                 )
-                added = self.data.add_sequence(crossover_sequence)
+                added = self.data.add_sequence(
+                    chain=chain, new_sequence=crossover_sequence
+                )
                 # Set a warning is not possible to create new sequences by recombination
                 if n_tries > max_attempts:
                     self.logger.warning("Too many tries to generate a new sequence")
@@ -348,9 +362,12 @@ class GeneticAlgorithm(Optimizer):
                 mutated_sequence = self.generate_mutation_sequence(
                     sequence_to_mutate=crossover_sequence,
                     mutation_rate=mutation_rate,
+                    chain=chain,
                 )
                 n_tries = 0
-                added = self.data.add_sequence(mutated_sequence)
+                added = self.data.add_sequence(
+                    chain=chain, new_sequence=mutated_sequence
+                )
                 while not added:
                     self.logger.warning(
                         f"Sequence {crossover_sequence} already in the data, generating a new one"
@@ -358,8 +375,11 @@ class GeneticAlgorithm(Optimizer):
                     mutated_sequence = self.generate_mutation_sequence(
                         sequence_to_mutate=crossover_sequence,
                         mutation_rate=mutation_rate,
+                        chain=chain
                     )
-                    added = self.data.add_sequence(mutated_sequence)
+                    added = self.data.add_sequence(
+                        chain=chain, new_sequence=mutated_sequence
+                    )
                     if n_tries > max_attempts:
                         self.logger.error("Too many tries to generate a new sequence")
                         raise RuntimeError("Too many tries to generate a new sequence")

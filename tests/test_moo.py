@@ -19,7 +19,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         metrics = [Alphabet()]
         debug = True
         max_iteration = 5
-        population_size = 5
+        population_size = 20
         seed = 1235
         pdb = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/7R1K.pdb"
         chains = ["A"]
@@ -56,7 +56,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             folder_name=folder_name,
             seed=seed,
             population_size=population_size,
-            offset=4,
+            offset=3,
         )
         if os.path.exists("mood_job"):
             shutil.rmtree("mood_job")

@@ -12,6 +12,7 @@ import shutil
 
 import pandas as pd
 from Bio.PDB.PDBParser import PDBParser
+from Bio.Seq import Seq
 from Bio.SeqUtils import seq1
 
 from mood.base.data import AlgorithmDataSingleton
@@ -336,11 +337,13 @@ class MultiObjectiveOptimization:
                 f"Error saving the data_frame from iteration {current_iteration}"
             )
 
-    def select_parents(sequences_eval_df, percent_of_parents=0.25):
+    def select_parents(self, evaluated_sequences_df, percent_of_parents=0.25):
         # sort by rank, keep the 25% of the sequences as parents
-        sequences_ranked = sequences_eval_df.sort_values(by="Rank")
+        sequences_ranked = evaluated_sequences_df.sort_values(by="Rank")
         top = sequences_ranked.head(int(len(sequences_ranked) * percent_of_parents))
-        return top["Sequence"]
+        top_list = [Seq(seq) for seq in top["Sequence"].tolist()]
+
+        return top_list
 
     def setup_folders_iter(self, current_iteration):
         if not os.path.exists(self.folder_name + "/" + str(current_iteration).zfill(3)):
@@ -390,10 +393,10 @@ class MultiObjectiveOptimization:
         self.logger.info("------------------------------------------------")
 
         self.current_iteration = 0
-        parents_sequences = None
+        parents_sequences = {}
 
         # Get if the algorithm is finished, total_sequences, and the dataframe of the last iterations
-        finished, sequences_eval_df = self.check_previous_iterations()
+        finished, evaluated_sequences_df = self.check_previous_iterations()
         if finished:
             self.logger.info(
                 "Genetic algorithm has finished running. Increase the number of iterations to continue"
@@ -436,38 +439,44 @@ class MultiObjectiveOptimization:
                 # Get the sequences from the optimizer
                 for chain in self.chains:
                     # Select the parent sequences
-                    parents_sequences = self.select_parents(sequences_eval_df[chain])
+                    parents_sequences[chain] = self.select_parents(
+                        evaluated_sequences_df[chain]
+                    )
                     self.logger.info("Generating the child population")
                     sequences_to_evaluate[chain] = (
                         self.optimizer.generate_child_population(
-                            parents_sequences,
-                            self.mutable_positions[chain],
+                            parents_sequences[chain], chain=chain
                         )
                     )
 
             # Calculate the metrics
             self.logger.info("Calculating the metrics")
             # TODO add information to the data_frame, iteration, mutations, etc
+            evaluated_sequences_df = {}
             for chain in self.chains:
                 parents_sequences = {}
-                sequences_eval_df = pd.DataFrame()
+                sequences_to_evaluate_str = [
+                    str(x) for x in sequences_to_evaluate[chain]
+                ]
                 metric_df = pd.DataFrame(
-                    sequences_to_evaluate[chain], columns=["Sequence"]
+                    sequences_to_evaluate_str, columns=["Sequence"]
                 )
                 metric_df.set_index("Sequence", inplace=True)
                 for metric in self.metrics:
-                    metric_result = metric.compute(sequences_to_evaluate)
+                    metric_result = metric.compute(sequences_to_evaluate_str)
                     metric_df = metric_df.merge(metric_result, on="Sequence")
 
                 # Evaluate the population and rank the individuals
                 self.logger.info("Evaluating and ranking the population")
                 # Returns a dataframe with the sequences and the metrics, and a column with the rank
-                sequences_eval_df[chain] = self.optimizer.eval_population(metric_df)
+                evaluated_sequences_df[chain] = self.optimizer.eval_population(
+                    metric_df
+                )
 
             # TODO save the sequences to the data class, to accumulate the sequences
             # Save the sequences and the data_frame
             self.save_iteration(
-                self.current_iteration, sequences_to_evaluate, sequences_eval_df
+                self.current_iteration, sequences_to_evaluate, evaluated_sequences_df
             )
             self.current_iteration += 1
 
