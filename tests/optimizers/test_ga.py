@@ -221,6 +221,42 @@ class TestGeneticAlgorithm(unittest.TestCase):
             ranked_df["Rank"].tolist() == expected_ranks
         ), f"Expected ranks {expected_ranks}, but got {ranked_df['Rank'].tolist()}"
 
+    def test_eval_population(self):
+        import pandas as pd
+
+        data_frame = pd.DataFrame(
+            {
+                "Sequence": [
+                    Seq("ATG"),
+                    Seq("TGA"),
+                    Seq("GAT"),
+                    Seq("PIU"),
+                ],
+                "Metric1": [2, 1, 3, 3],
+                "Metric2": [-3, -1, -3, -1],
+            }
+        )
+        """
+        "Metric1": [2, 6, 1, 1],
+        "Metric2": [1, 6, 1, 3],
+
+        "Metric1": [-2, -6, -1, -1],
+        "Metric2": [-1, -6, -1, -3],
+        
+        "Metric1": [2, 1, 3, 3],
+        "Metric2": [-3, -1, -3, -1],
+        """
+
+        states = {"Metric1": "Positive", "Metric2": "Negative"}
+
+        ranked_df = self.ga.calculate_non_dominated_rank(data_frame, states)
+
+        # Assert that the Rank column has the expected values
+        expected_ranks = [2.0, 1.0, 2.0, 2.0]
+        assert (
+            ranked_df["Rank"].tolist() == expected_ranks
+        ), f"Expected ranks {expected_ranks}, but got {ranked_df['Rank'].tolist()}"
+
 
 # Usage example
 

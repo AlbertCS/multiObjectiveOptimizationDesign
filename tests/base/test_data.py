@@ -6,7 +6,13 @@ from pandas.testing import assert_frame_equal
 
 from mood.base.data import AlgorithmDataSingleton
 
-SEQUENCES_C = {"A": {0: Seq("ATG"), 1: Seq("TGA"), 2: Seq("GAT")}}
+SEQUENCES_C = {
+    "A": {
+        Seq("ATG"): None,
+        Seq("TGG"): (("A", 1, "T"), ("T", 2, "G")),
+        Seq("GAT"): (("A", 1, "G"), ("T", 2, "A"), ("G", 3, "T")),
+    }
+}
 DATA_FRAME = pd.DataFrame(
     {
         "seq_index": [0, 1, 2],
@@ -24,7 +30,12 @@ class AlgorithmDataSingletonTests(unittest.TestCase):
 
     def test_replace_data(self):
         """Test replacing data in the singleton."""
-        new_sequences = {"A": {4: Seq("CGA"), 5: Seq("TAC")}}
+        new_sequences = {
+            "A": {
+                Seq("CGA"): (("A", 1, "C"), ("T", 2, "G"), ("G", 3, "A")),
+                Seq("TAC"): (("A", 1, "T"), ("T", 2, "A"), ("G", 3, "C")),
+            }
+        }
         self.data.replace_data(new_sequences)
 
         self.assertEqual(self.data.sequences, new_sequences)
@@ -43,13 +54,30 @@ class AlgorithmDataSingletonTests(unittest.TestCase):
     def test_add_sequence(self):
         """Test adding a single sequence."""
         new_sequence = Seq("CGA")
-        self.data.add_sequence(new_sequence)
+        self.data.add_sequence(chain="A", new_sequence=new_sequence, mut=None)
 
         expected_sequences = {
-            0: Seq("ATG"),
-            1: Seq("TGA"),
-            2: Seq("GAT"),
-            3: Seq("CGA"),
+            "A": {
+                Seq("ATG"): None,
+                Seq("TGG"): (("A", 1, "T"), ("T", 2, "G")),
+                Seq("GAT"): (("A", 1, "G"), ("T", 2, "A"), ("G", 3, "T")),
+                Seq("CGA"): None,
+            }
+        }
+        self.assertEqual(self.data.sequences, expected_sequences)
+
+    def test_add_sequence_same(self):
+        """Test adding a single sequence."""
+        new_sequence = Seq("ATG")
+        self.data.add_sequence(chain="A", new_sequence=new_sequence)
+
+        expected_sequences = {
+            "A": {
+                Seq("ATG"): None,
+                Seq("TGG"): (("A", 1, "T"), ("T", 2, "G")),
+                Seq("GAT"): (("A", 1, "G"), ("T", 2, "A"), ("G", 3, "T")),
+                Seq("CGA"): None,
+            }
         }
         self.assertEqual(self.data.sequences, expected_sequences)
 
@@ -70,7 +98,7 @@ class AlgorithmDataSingletonTests(unittest.TestCase):
 
     def test_multiple_instances_return_same_singleton(self):
         """Test that multiple instances return the same singleton."""
-        instance1 = AlgorithmDataSingleton(sequences={"0": "seq1"})
+        instance1 = AlgorithmDataSingleton(sequences={"A": Seq("ATG")})
         self.assertEqual(instance1.sequences, SEQUENCES_C)
 
     def test_empty_sequences(self):

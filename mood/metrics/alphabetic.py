@@ -4,6 +4,8 @@ from mood.metrics import Metric
 class Alphabet(Metric):
     def __init__(self):
         super().__init__()
+        self.state = "Positive"
+        self.name = "Alphabet"
 
     def alphabetical_order_score(self, sequence):
         """
@@ -23,7 +25,7 @@ class Alphabet(Metric):
 
         # Get the alphabetical score for each sequence
         for sequence in sequences:
-            df.loc[df["Sequence"] == sequence, "Alphabetical Score"] = (
+            df.loc[df["Sequence"] == sequence, "Alphabet"] = (
                 self.alphabetical_order_score(sequence)
             )
 

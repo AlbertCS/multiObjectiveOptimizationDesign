@@ -81,19 +81,23 @@ class GeneticAlgorithm(Optimizer):
                     # Select a sequence to mutate
                     sequence_to_start_from = self.rng.choice(self.child_sequences)
 
-                    mutated_sequence, _, _ = self.generate_mutation_sequence(
+                    mutated_sequence, mut = self.generate_mutation_sequence(
                         sequence_to_start_from, self.init_mutation_rate, chain
                     )
                     # Add the new sequence to the data object and iter_sequences
-                    added = self.data.add_sequence(chain, mutated_sequence)
+                    added = self.data.add_sequence(
+                        chain=chain, new_sequence=mutated_sequence, mut=mut
+                    )
                     while not added:
                         self.logger.warning(
                             f"Sequence {mutated_sequence} already in the data, generating a new one"
                         )
-                        mutated_sequence, _, _ = self.generate_mutation_sequence(
+                        mutated_sequence, mut = self.generate_mutation_sequence(
                             sequence_to_start_from, self.init_mutation_rate, chain
                         )
-                        added = self.data.add_sequence(chain, mutated_sequence)
+                        added = self.data.add_sequence(
+                            chain=chain, new_sequence=mutated_sequence, mut=mut
+                        )
                     self.child_sequences.append(mutated_sequence)
 
                     self.logger.debug(
@@ -115,7 +119,9 @@ class GeneticAlgorithm(Optimizer):
                         sequences_pool=self.child_sequences, chain=chain
                     )
                     # Add the new sequence to the data object
-                    added = self.data.add_sequence(chain, crossover_sequence)
+                    added = self.data.add_sequence(
+                        chain=chain, new_sequence=crossover_sequence
+                    )
                     while not added:
                         self.logger.warning(
                             f"Sequence {crossover_sequence} already in the data, generating a new one"
@@ -123,7 +129,9 @@ class GeneticAlgorithm(Optimizer):
                         crossover_sequence = self.generate_crossover_sequence(
                             sequences_pool=self.child_sequences, chain=chain
                         )
-                        added = self.data.add_sequence(chain, crossover_sequence)
+                        added = self.data.add_sequence(
+                            chain=chain, new_sequence=crossover_sequence
+                        )
                     self.child_sequences.append(crossover_sequence)
                     # self.logger.debug(
                     #     f"Child sequences after generate crossover: \n  {self.child_sequences}"
@@ -143,8 +151,8 @@ class GeneticAlgorithm(Optimizer):
         if not self.mutable_aa:
             self.logger.error("No mutable amino acids provided")
             raise ValueError("No mutable amino acids provided")
-        old_aa = {}
         new_aa = {}
+        mut = []
         # Transform to a mutable sequence
         mutable_seq = MutableSeq(sequence_to_mutate)
         self.logger.debug(f"Sequence_to_mutate: {sequence_to_mutate}")
@@ -157,11 +165,11 @@ class GeneticAlgorithm(Optimizer):
                 and self.rng.random() <= mutation_rate
             ):
                 new_residues = [nuc for nuc in self.mutable_aa[chain][i] if nuc != aa]
-                old_aa[i] = aa
                 new_aa[i] = self.rng.choice(new_residues)
                 mutable_seq[i - 1] = new_aa[i]
+                mut.append((aa, i, new_aa[i]))
         self.logger.debug(f"Mutated_sequence: {mutable_seq}")
-        return Seq(mutable_seq), old_aa, new_aa
+        return Seq(mutable_seq), mut
 
     def generate_crossover_sequence(
         self,
@@ -246,15 +254,22 @@ class GeneticAlgorithm(Optimizer):
 
         return df[pareto_front_mask]
 
-    def calculate_non_dominated_rank(
-        self,
-        df,
-    ):
+    def calculate_non_dominated_rank(self, df, metric_states=None):
         """
         Calculate the non-dominated rank for each individual in the population.
         """
-        values = df.values
-        population_size = values.shape[0]
+        df_to_empty = df.copy()
+
+        df_to_empty = df_to_empty.drop(columns=["Sequence"])
+        population_size = df_to_empty.shape[0]
+
+        # Changes the values by state
+        for state in metric_states:
+            df_to_empty[state] = df_to_empty[state].apply(
+                lambda x: -x if metric_states[state] == "Positive" else x
+            )
+
+        values = df_to_empty.values
         ranks = np.zeros(population_size, dtype=int)
 
         for i in range(population_size):
@@ -279,7 +294,6 @@ class GeneticAlgorithm(Optimizer):
         """
         df_to_empty = df.copy()
         df_final = df.copy()
-
         df_to_empty = df_to_empty.drop(columns=["Sequence"])
         rank = 1
         while not df_to_empty.empty:
@@ -297,14 +311,18 @@ class GeneticAlgorithm(Optimizer):
 
         return df_final
 
-    def eval_population(self, df, dimension=1):
+    def rank_by_pareto_old(self, df, dimension):
+        pass
+
+    def eval_population(self, df, dimension=1, metric_states=None):
         """
         Evaluates the population to identify the parent population for the next generation.
         Returns the DataFrame with a the rank in a new column.
         """
         self.logger.info("Evaluating the population")
         # Calculate the Pareto front
-        ranked_df = self.rank_by_pareto(df, dimension)
+        # ranked_df = self.rank_by_pareto(df, dimension)
+        ranked_df = self.calculate_non_dominated_rank(df, metric_states)
 
         return ranked_df
 
@@ -359,26 +377,26 @@ class GeneticAlgorithm(Optimizer):
 
             # If it's not possible to generate new sequences by recombination, try to mutate
             if n_tries > max_attempts and not added:
-                mutated_sequence = self.generate_mutation_sequence(
+                mutated_sequence, mut = self.generate_mutation_sequence(
                     sequence_to_mutate=crossover_sequence,
                     mutation_rate=mutation_rate,
                     chain=chain,
                 )
                 n_tries = 0
                 added = self.data.add_sequence(
-                    chain=chain, new_sequence=mutated_sequence
+                    chain=chain, new_sequence=mutated_sequence, mut=mut
                 )
                 while not added:
                     self.logger.warning(
                         f"Sequence {crossover_sequence} already in the data, generating a new one"
                     )
-                    mutated_sequence = self.generate_mutation_sequence(
+                    mutated_sequence, mut = self.generate_mutation_sequence(
                         sequence_to_mutate=crossover_sequence,
                         mutation_rate=mutation_rate,
-                        chain=chain
+                        chain=chain,
                     )
                     added = self.data.add_sequence(
-                        chain=chain, new_sequence=mutated_sequence
+                        chain=chain, new_sequence=mutated_sequence, mut=mut
                     )
                     if n_tries > max_attempts:
                         self.logger.error("Too many tries to generate a new sequence")

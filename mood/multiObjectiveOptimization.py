@@ -126,7 +126,7 @@ class MultiObjectiveOptimization:
         self.folders = {}
         self.current_iteration = 0
         self.population_size = population_size
-        self.sequences = {chain: [] for chain in self.chains}
+        self.sequences = {chain: {} for chain in self.chains}
         self.sequences_file_name = "sequences.pkl"
         self.data_frame_file_name = "data_frame.pkl"
 
@@ -462,15 +462,17 @@ class MultiObjectiveOptimization:
                     sequences_to_evaluate_str, columns=["Sequence"]
                 )
                 metric_df.set_index("Sequence", inplace=True)
+                metric_states = {}
                 for metric in self.metrics:
                     metric_result = metric.compute(sequences_to_evaluate_str)
                     metric_df = metric_df.merge(metric_result, on="Sequence")
+                    metric_states[metric.name] = metric.state
 
                 # Evaluate the population and rank the individuals
                 self.logger.info("Evaluating and ranking the population")
                 # Returns a dataframe with the sequences and the metrics, and a column with the rank
                 evaluated_sequences_df[chain] = self.optimizer.eval_population(
-                    metric_df
+                    metric_df, metric_states
                 )
 
             # TODO save the sequences to the data class, to accumulate the sequences

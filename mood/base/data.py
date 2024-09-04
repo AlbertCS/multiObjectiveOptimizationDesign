@@ -34,7 +34,7 @@ class AlgorithmDataSingleton:
 
     def chains(self, chains):
         self._chains = chains
-        self.sequences = {chain: [] for chain in self.chains}
+        self.sequences = {chain: {} for chain in self.chains}
 
     def clear_data(self):
         """
@@ -54,16 +54,16 @@ class AlgorithmDataSingleton:
         Replace the existing sequences and data frame in the AlgorithmDataSingleton instance with new ones.
 
         Parameters:
-        sequences: {"chain": {"index": "sequence"}} - New sequences to replace the existing ones.
+        sequences: {"chain": {Seq: Mut}} - New sequences to replace the existing ones.
         """
         self.sequences = sequences
 
-    def add_sequence(self, chain, new_sequence) -> bool:
+    def add_sequence(self, chain, new_sequence, mut=None) -> bool:
         """Returns True if the sequence was added successfully, False otherwise."""
-        if new_sequence in self.sequences.get(chain):
+        if new_sequence in self.sequences.get(chain).keys():
             return False
         else:
-            self.sequences[chain].append(new_sequence)
+            self.sequences[chain][new_sequence] = mut
             return True
 
     def get_data(self):
