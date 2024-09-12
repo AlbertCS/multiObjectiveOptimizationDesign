@@ -1,7 +1,8 @@
 import random
 
 import numpy as np
-from pyrosetta import FoldTree, rosetta
+import pyrosetta
+from pyrosetta import FoldTree, rosetta, toolbox
 
 
 class PyrosettaFunctions:
@@ -39,7 +40,17 @@ class PyrosettaFunctions:
         atom_pair_constraint_weight=1,
         minimization_steps=100,
         energy_threshold=2,
+        default_repeats=1,
+        seed=12345,
+        params_folder="params",
+        pdb=None,
     ):
+        options = f"-relax:default_repeats {default_repeats}"
+        if seed:
+            options += " -constant_seed true"
+            options += f" -jran {seed}"
+        options += f" -extra_res_path {params_folder}"
+        pyrosetta.init(options=options)
 
         self.sfxn = rosetta.core.scoring.ScoreFunctionFactory.create_score_function(
             sfxn
@@ -47,6 +58,11 @@ class PyrosettaFunctions:
         self.atom_pair_constraint_weight = atom_pair_constraint_weight
         self.minimization_steps = minimization_steps
         self.energy_threshold = energy_threshold
+        self._native_pose = pyrosetta.pose_from_pdb(pdb)
+
+    @property
+    def native_pose(self):
+        return self._native_pose
 
     def calculate_Apo_Score(self, pose, ligand_chain) -> float:
         """
@@ -200,7 +216,7 @@ class PyrosettaFunctions:
         self,
         pose,
         minimization_cycles=10,
-    ):
+    ) -> float:
         fastrelax_mover_sampling = rosetta.protocols.relax.FastRelax()
         fastrelax_mover_sampling.set_scorefxn(self.sfxn)
         print("Running minimisation...")
@@ -226,7 +242,45 @@ class PyrosettaFunctions:
 
         print("Finished minimisation")
 
+        return energy_final
+
         # pose.dump_pdb("relaxed.pdb")
+
+    def angle(self, a, b, c):
+        """
+        Calculate the angle between three coordinate vectors
+
+        Parameters
+        ==========
+        coord1 : numpy.ndarray
+            Vector for the first coordinate.
+        coord2 : numpy.ndarray
+            Vector for the second coordinate.
+        coord3 : numpy.ndarray
+            Vector for the third coordinate.
+        Returns
+        -------
+        numpy.ndarray
+            Values of the angle in radians.
+        """
+        ba = a - b
+        bc = c - b
+        cosine_angle = np.dot(ba, bc) / (np.linalg.norm(ba) * np.linalg.norm(bc))
+        angle = np.arccos(cosine_angle)
+        return angle
+
+    def distance(self, pose, atom1, atom2):
+        a1 = np.array(pose.residue(atom1["resname"]).xyz(atom1["atomname"]))
+        a2 = np.array(pose.residue(atom2["resname"]).xyz(atom2["atomname"]))
+        return np.linalg.norm(a1 - a2)
+
+    def mutate_native_pose(self, pose, seq):
+        for res, aa in zip(pose.residues, seq):
+            if res.name1() == "Z":
+                continue
+            elif str(res.name1()) != str(aa):
+                toolbox.mutate_residue(pose, res.seqpos(), aa)
+        return pose
 
     def _getPeptideFoldTree(
         self, pose, anchoring_residue, peptide_chain="L", ft_type="m"

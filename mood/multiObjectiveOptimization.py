@@ -455,6 +455,7 @@ class MultiObjectiveOptimization:
             evaluated_sequences_df = {}
             for chain in self.chains:
                 parents_sequences = {}
+                # Get the sequences as a string format
                 sequences_to_evaluate_str = [
                     str(x) for x in sequences_to_evaluate[chain]
                 ]

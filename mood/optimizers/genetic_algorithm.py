@@ -13,7 +13,7 @@ class GeneticAlgorithm(Optimizer):
     def __init__(
         self,
         population_size: int = 100,
-        init_mutation_rate: float = 0.6,
+        init_mutation_rate: float = 0.4,
         seed: int = 12345,
         debug: bool = False,
         data: Any = None,
