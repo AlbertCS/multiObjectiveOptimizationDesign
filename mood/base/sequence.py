@@ -13,7 +13,8 @@ class Sequence:
         The PDB id of the chain that the sequence represents.
     ...
     """
-
+# TODO un dictionary de atributs, el boolen de child
+    
     def __init__(
         self,
         sequence: str,

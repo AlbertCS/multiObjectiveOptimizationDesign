@@ -161,4 +161,4 @@ cython_debug/
 
 # Ignore test related files
 mood_job*
-
+seqs.txt

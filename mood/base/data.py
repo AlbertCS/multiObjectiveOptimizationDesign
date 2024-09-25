@@ -32,6 +32,7 @@ class AlgorithmDataSingleton:
     def sequences(self, sequences):
         self._sequences = sequences
 
+    @chains.setter
     def chains(self, chains):
         self._chains = chains
         self.sequences = {chain: {} for chain in self.chains}
@@ -42,12 +43,6 @@ class AlgorithmDataSingleton:
         Reset sequences to an empty dictionary and create an empty DataFrame with columns ["seq_index", "Sequence", "iteration"].
         """
         self._sequences = {}
-
-    def clear_dataFrame(self):
-        """
-        Clear the existing data frame in the AlgorithmDataSingleton instance.
-        Create an empty DataFrame with columns ["seq_index", "Sequence", "iteration"].
-        """
 
     def replace_data(self, sequences):
         """

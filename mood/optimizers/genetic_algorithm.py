@@ -98,6 +98,7 @@ class GeneticAlgorithm(Optimizer):
                         added = self.data.add_sequence(
                             chain=chain, new_sequence=mutated_sequence, mut=mut
                         )
+                    # TODO add mover for calculating the energy of the new sequence
                     self.child_sequences.append(mutated_sequence)
 
                     self.logger.debug(
@@ -366,6 +367,8 @@ class GeneticAlgorithm(Optimizer):
                 crossover_sequence = self.generate_crossover_sequence(
                     sequences_pool=parent_sequences, chain=chain
                 )
+                # TODO add mover for calculating the energy of the new sequence
+
                 added = self.data.add_sequence(
                     chain=chain, new_sequence=crossover_sequence
                 )

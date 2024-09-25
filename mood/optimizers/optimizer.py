@@ -54,10 +54,6 @@ class Optimizer:
         pass
 
     @abstractmethod
-    def get_sequences(self) -> list:
-        pass
-
-    @abstractmethod
     def eval_population(self, population):
         pass
 
