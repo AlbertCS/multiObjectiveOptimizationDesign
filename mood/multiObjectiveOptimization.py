@@ -431,7 +431,9 @@ class MultiObjectiveOptimization:
                         chain, seq_chains[chain]
                     )
 
+                # Set native sequence and save the info
                 self.native_sequence = seq_chains
+                self.optimizer.native = self.native_sequence
                 self.save_info(seq_chains)
 
             else:
@@ -468,6 +470,7 @@ class MultiObjectiveOptimization:
                     metric_result = metric.compute(sequences_to_evaluate_str)
                     metric_df = metric_df.merge(metric_result, on="Sequence")
                     metric_states[metric.name] = metric.state
+                    # TODO redoo the state in ranking, as now metric states is a dict of dicts {metric_name: {submetric_name: state}}
 
                 # Evaluate the population and rank the individuals
                 self.logger.info("Evaluating and ranking the population")

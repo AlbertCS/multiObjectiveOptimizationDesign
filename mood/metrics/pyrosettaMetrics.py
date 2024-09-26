@@ -9,15 +9,23 @@ from mood.metrics import Metric
 
 
 class RosettaMetrics(Metric):
-    def __init__(self, params_folder, pdb, cpus, seed, native_pdb):
+    def __init__(self, params_folder, pdb, cpus, seed, native_pdb, distances_file):
         super().__init__()
-        self.state = "Positive"
-        self.name = "rosetta"
+        self.state = {
+            "RelaxEnergy": "negative",
+            "InterfaceScore": "negative",
+            "Apo Score": "negative",
+            "HydrophobicScore": "negative",
+            "SaltBridges": "positive",
+            "distances": "negative",
+        }
+        self.name = "rosettaMetrics"
         self.params_folder = params_folder
         self.pdb = pdb
         self.cpus = cpus
         self.seed = seed
         self.native_pdb = native_pdb
+        self.distances_file = distances_file
 
     def _copyScriptFile(
         self, output_folder, script_name, no_py=False, subfolder=None, hidden=True
@@ -80,7 +88,7 @@ class RosettaMetrics(Metric):
                     f"--seed {self.seed}",
                     f"--params_folder {self.params_folder}",
                     f"--native_pdb {self.native_pdb}",
-                    f"--distances {distances_file}",
+                    f"--distances {self.distances_file}",
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -95,5 +103,7 @@ class RosettaMetrics(Metric):
             raise ValueError("The Rosetta metrics did not run successfully")
         else:
             df = pd.read_csv("sequences_energy.csv")
+            # Add the sequence column
+            df["Sequence"] = sequences
 
         return df

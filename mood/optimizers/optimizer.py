@@ -48,6 +48,15 @@ class Optimizer:
                 f"Invalid optimizer type {optimizerType}. Allowed types: {OptimizersType}"
             )
         self.TYPE: OptimizersType = optimizerType
+        self.native = None
+
+    @property
+    def native(self):
+        return self._native
+
+    @native.setter
+    def native(self, native):
+        self._native = native
 
     @abstractmethod
     def init_population(self):

@@ -2,10 +2,10 @@ import random
 from typing import Any, Dict, List
 
 import numpy as np
-from Bio.Seq import MutableSeq, Seq
 from icecream import ic
 
 from mood.base.log import Logger
+from mood.base.sequence import Sequence
 from mood.optimizers.optimizer import Optimizer, OptimizersType
 
 
@@ -38,6 +38,7 @@ class GeneticAlgorithm(Optimizer):
         self.logger = Logger(debug).get_log()
         self.child_sequences = []
         self.crossoverTypes = ["uniform", "two_point", "single_point"]
+        self.native = None
 
     def init_population(self, chain, sequences_initial):
         self.logger.info("Initializing the population")
@@ -56,8 +57,16 @@ class GeneticAlgorithm(Optimizer):
         try:
             # Adding the initial sequences to the population
             for sequence in sequences_initial:
-                self.data.add_sequence(chain, Seq(sequence))
-                self.child_sequences.append(Seq(sequence))
+                self.data.add_sequence(
+                    chain,
+                    Sequence(
+                        sequence=sequence,
+                        chain=chain,
+                        index=self.data.nsequences(chain) + 1,
+                        active=True,
+                    ),
+                )
+                self.child_sequences.append(sequence)
 
             # Getting the number of missing sequences
             n_missing = self.population_size - len(self.child_sequences)
@@ -86,7 +95,15 @@ class GeneticAlgorithm(Optimizer):
                     )
                     # Add the new sequence to the data object and iter_sequences
                     added = self.data.add_sequence(
-                        chain=chain, new_sequence=mutated_sequence, mut=mut
+                        chain=chain,
+                        new_sequence=Sequence(
+                            sequence=mutated_sequence,
+                            chain=chain,
+                            index=self.data.nsequences(chain) + 1,
+                            active=True,
+                            mutations=mut,
+                            native=self.native,
+                        ),
                     )
                     while not added:
                         self.logger.warning(
@@ -96,7 +113,15 @@ class GeneticAlgorithm(Optimizer):
                             sequence_to_start_from, self.init_mutation_rate, chain
                         )
                         added = self.data.add_sequence(
-                            chain=chain, new_sequence=mutated_sequence, mut=mut
+                            chain=chain,
+                            new_sequence=Sequence(
+                                sequence=mutated_sequence,
+                                chain=chain,
+                                index=self.data.nsequences(chain) + 1,
+                                active=True,
+                                mutations=mut,
+                                native=self.native,
+                            ),
                         )
                     # TODO add mover for calculating the energy of the new sequence
                     self.child_sequences.append(mutated_sequence)
@@ -121,7 +146,15 @@ class GeneticAlgorithm(Optimizer):
                     )
                     # Add the new sequence to the data object
                     added = self.data.add_sequence(
-                        chain=chain, new_sequence=crossover_sequence
+                        chain=chain,
+                        new_sequence=Sequence(
+                            sequence=crossover_sequence,
+                            chain=chain,
+                            index=self.data.nsequences(chain) + 1,
+                            active=True,
+                            mutations=mut,
+                            native=self.native,
+                        ),
                     )
                     while not added:
                         self.logger.warning(
@@ -131,7 +164,15 @@ class GeneticAlgorithm(Optimizer):
                             sequences_pool=self.child_sequences, chain=chain
                         )
                         added = self.data.add_sequence(
-                            chain=chain, new_sequence=crossover_sequence
+                            chain=chain,
+                            new_sequence=Sequence(
+                                sequence=crossover_sequence,
+                                chain=chain,
+                                index=self.data.nsequences(chain) + 1,
+                                active=True,
+                                mutations=mut,
+                                native=self.native,
+                            ),
                         )
                     self.child_sequences.append(crossover_sequence)
                     # self.logger.debug(
@@ -359,7 +400,17 @@ class GeneticAlgorithm(Optimizer):
                 sequences_pool=parent_sequences, chain=chain
             )
             # Add the new sequence to the data object
-            added = self.data.add_sequence(chain=chain, new_sequence=crossover_sequence)
+            added = self.data.add_sequence(
+                chain=chain,
+                new_sequence=Sequence(
+                    sequence=crossover_sequence,
+                    chain=chain,
+                    index=self.data.nsequences(chain) + 1,
+                    active=True,
+                    mutations=mut,
+                    native=self.native,
+                ),
+            )
             while not added:
                 self.logger.warning(
                     f"Sequence {crossover_sequence} already in the data, generating a new one"
@@ -370,7 +421,15 @@ class GeneticAlgorithm(Optimizer):
                 # TODO add mover for calculating the energy of the new sequence
 
                 added = self.data.add_sequence(
-                    chain=chain, new_sequence=crossover_sequence
+                    chain=chain,
+                    new_sequence=Sequence(
+                        sequence=crossover_sequence,
+                        chain=chain,
+                        index=self.data.nsequences(chain) + 1,
+                        active=True,
+                        mutations=mut,
+                        native=self.native,
+                    ),
                 )
                 # Set a warning is not possible to create new sequences by recombination
                 if n_tries > max_attempts:
@@ -387,7 +446,15 @@ class GeneticAlgorithm(Optimizer):
                 )
                 n_tries = 0
                 added = self.data.add_sequence(
-                    chain=chain, new_sequence=mutated_sequence, mut=mut
+                    chain=chain,
+                    new_sequence=Sequence(
+                        sequence=mutated_sequence,
+                        chain=chain,
+                        index=self.data.nsequences(chain) + 1,
+                        active=True,
+                        mutations=mut,
+                        native=self.native,
+                    ),
                 )
                 while not added:
                     self.logger.warning(
@@ -399,7 +466,15 @@ class GeneticAlgorithm(Optimizer):
                         chain=chain,
                     )
                     added = self.data.add_sequence(
-                        chain=chain, new_sequence=mutated_sequence, mut=mut
+                        chain=chain,
+                        new_sequence=Sequence(
+                            sequence=mutated_sequence,
+                            chain=chain,
+                            index=self.data.nsequences(chain) + 1,
+                            active=True,
+                            mutations=mut,
+                            native=self.native,
+                        ),
                     )
                     if n_tries > max_attempts:
                         self.logger.error("Too many tries to generate a new sequence")
