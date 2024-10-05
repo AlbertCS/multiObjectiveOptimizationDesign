@@ -9,7 +9,7 @@ from mood.metrics import Metric
 
 
 class RosettaMetrics(Metric):
-    def __init__(self, params_folder, pdb, cpus, seed, native_pdb, distances_file):
+    def __init__(self, params_folder, cpus, seed, native_pdb, distances_file):
         super().__init__()
         self.state = {
             "RelaxEnergy": "negative",
@@ -21,7 +21,6 @@ class RosettaMetrics(Metric):
         }
         self.name = "rosettaMetrics"
         self.params_folder = params_folder
-        self.pdb = pdb
         self.cpus = cpus
         self.seed = seed
         self.native_pdb = native_pdb

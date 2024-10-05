@@ -244,7 +244,6 @@ class Mpi_relax:
         comm = MPI.COMM_WORLD
         rank = comm.Get_rank()
         size = comm.Get_size()
-        print(f"Size: {size}")
         # size = 4
 
         # List of sequences to be relaxed

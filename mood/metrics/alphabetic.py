@@ -1,10 +1,10 @@
-from mood.metrics import Metric
+from mood.metrics.metric import Metric
 
 
 class Alphabet(Metric):
     def __init__(self):
         super().__init__()
-        self.state = "Positive"
+        self.state = {"Alphabet": "positive"}
         self.name = "Alphabet"
 
     def alphabetical_order_score(self, sequence):

@@ -13,13 +13,14 @@ class GeneticAlgorithm(Optimizer):
     def __init__(
         self,
         population_size: int = 100,
-        init_mutation_rate: float = 0.4,
+        init_mutation_rate: float = 0.1,
         seed: int = 12345,
         debug: bool = False,
         data: Any = None,
         mutation_seq_percent: float = 0.5,
-        mutable_positions: List[int] = [],
+        # mutable_positions: List[int] = [],
         mutable_aa: Dict[int, Any] = {},
+        rosetta_mover: bool = False,  # Rosetta minimization mover to decide if the mutations are accepted
     ) -> None:
         super().__init__(
             population_size=population_size,
@@ -32,7 +33,7 @@ class GeneticAlgorithm(Optimizer):
         # Number of mutated sequences to generate at the beginning
         self.mutation_seq_percent = mutation_seq_percent
         self.rng = random.Random(seed)
-        self.mutable_positions = mutable_positions
+        # self.mutable_positions = mutable_positions
         self.mutable_aa = mutable_aa
         self.init_mutation_rate = init_mutation_rate
         self.logger = Logger(debug).get_log()
@@ -40,7 +41,7 @@ class GeneticAlgorithm(Optimizer):
         self.crossoverTypes = ["uniform", "two_point", "single_point"]
         self.native = None
 
-    def init_population(self, chain, sequences_initial):
+    def init_population(self, chain, sequences_initial, max_attempts=1000):
         self.logger.info("Initializing the population")
         # Initial checks
         if sequences_initial is None:
@@ -57,12 +58,13 @@ class GeneticAlgorithm(Optimizer):
         try:
             # Adding the initial sequences to the population
             for sequence in sequences_initial:
+                i = self.data.nsequences(chain) + 1
                 self.data.add_sequence(
                     chain,
                     Sequence(
                         sequence=sequence,
                         chain=chain,
-                        index=self.data.nsequences(chain) + 1,
+                        index=i,
                         active=True,
                     ),
                 )
@@ -72,7 +74,9 @@ class GeneticAlgorithm(Optimizer):
             n_missing = self.population_size - len(self.child_sequences)
             self.logger.debug(f"Initial child sequences: {self.child_sequences}")
             # Calculating the index of the next sequence to generate
-            index = self.population_size - n_missing
+            index = len(
+                self.child_sequences
+            )  # Mejor: usar el número actual de secuencias
             if n_missing == 0:
                 self.logger.info("Population already at the desired size")
             else:
@@ -84,7 +88,7 @@ class GeneticAlgorithm(Optimizer):
                     self.logger.info(
                         f"Populating {self.mutation_seq_percent * 100}% of the {self.population_size} total population"
                     )
-                # Adding sequences by mutation til the desired percentage is reached
+                # Adding sequences by mutation until the desired percentage is reached
                 while index < self.population_size * self.mutation_seq_percent:
                     self.logger.debug(f"Adding sequence {index} to the population")
                     # Select a sequence to mutate
@@ -105,9 +109,10 @@ class GeneticAlgorithm(Optimizer):
                             native=self.native,
                         ),
                     )
-                    while not added:
+                    attempt = 1
+                    while not added and attempt <= max_attempts:
                         self.logger.warning(
-                            f"Sequence {mutated_sequence} already in the data, generating a new one"
+                            f"Sequence {mutated_sequence} already in the data, generating a new one (Attempt {attempt})"
                         )
                         mutated_sequence, mut = self.generate_mutation_sequence(
                             sequence_to_start_from, self.init_mutation_rate, chain
@@ -123,7 +128,24 @@ class GeneticAlgorithm(Optimizer):
                                 native=self.native,
                             ),
                         )
-                    # TODO add mover for calculating the energy of the new sequence
+                        attempt += 1
+                    if not added:
+                        self.logger.error(
+                            f"Failed to add a unique mutated sequence after {max_attempts} attempts"
+                        )
+                        raise ValueError(
+                            "Failed to add a unique mutated sequence after maximum attempts"
+                        )
+
+                    # TODO: Add mover for calculating the energy of the new sequence
+                    # Ejemplo de cálculo de energía
+                    # pose = pyrosetta.pose_from_sequence(mutated_sequence)
+                    # scorefxn = pyrosetta.get_fa_scorefxn()
+                    # energy = scorefxn(pose)
+                    # self.data.set_energy(
+                    #     chain, mutated_sequence, energy
+                    # )  # Asumiendo que hay un método para esto
+
                     self.child_sequences.append(mutated_sequence)
 
                     self.logger.debug(
@@ -135,15 +157,16 @@ class GeneticAlgorithm(Optimizer):
                         f"Population size: {number_of_sequences} == {index} :index"
                     )
 
-                # Adding sequences by crossover til the desired population size is reached
+                # Adding sequences by crossover until the desired population size is reached
                 while number_of_sequences < self.population_size:
                     self.logger.debug(
-                        f"Adding sequence {number_of_sequences} to the population by CrossOver"
+                        f"Adding sequence {number_of_sequences} to the population by Crossover"
                     )
                     # Get two random sequences to crossover
                     crossover_sequence = self.generate_crossover_sequence(
                         sequences_pool=self.child_sequences, chain=chain
                     )
+                    n_tries = 0
                     # Add the new sequence to the data object
                     added = self.data.add_sequence(
                         chain=chain,
@@ -152,13 +175,13 @@ class GeneticAlgorithm(Optimizer):
                             chain=chain,
                             index=self.data.nsequences(chain) + 1,
                             active=True,
-                            mutations=mut,
+                            mutations=None,  # Corrección: no hay mutaciones específicas
                             native=self.native,
                         ),
                     )
-                    while not added:
+                    while not added and n_tries < max_attempts:
                         self.logger.warning(
-                            f"Sequence {crossover_sequence} already in the data, generating a new one"
+                            f"Sequence {crossover_sequence} already in the data, generating a new one (Attempt {n_tries + 1})"
                         )
                         crossover_sequence = self.generate_crossover_sequence(
                             sequences_pool=self.child_sequences, chain=chain
@@ -170,10 +193,28 @@ class GeneticAlgorithm(Optimizer):
                                 chain=chain,
                                 index=self.data.nsequences(chain) + 1,
                                 active=True,
-                                mutations=mut,
+                                mutations=None,  # Corrección: no hay mutaciones específicas
                                 native=self.native,
                             ),
                         )
+                        n_tries += 1
+                    if not added:
+                        self.logger.error(
+                            f"Failed to add a unique crossover sequence after {max_attempts} attempts"
+                        )
+                        raise ValueError(
+                            "Failed to add a unique crossover sequence after maximum attempts"
+                        )
+
+                    # TODO: Add mover for calculating the energy of the new sequence
+                    # Ejemplo de cálculo de energía
+                    # pose = pyrosetta.pose_from_sequence(crossover_sequence)
+                    # scorefxn = pyrosetta.get_fa_scorefxn()
+                    # energy = scorefxn(pose)
+                    # self.data.set_energy(
+                    #     chain, crossover_sequence, energy
+                    # )  # Asumiendo que hay un método para esto
+
                     self.child_sequences.append(crossover_sequence)
                     # self.logger.debug(
                     #     f"Child sequences after generate crossover: \n  {self.child_sequences}"
@@ -184,34 +225,33 @@ class GeneticAlgorithm(Optimizer):
             return self.child_sequences
         except Exception as e:
             self.logger.error(f"Error initializing the population: {e}")
+            raise ValueError(f"Error initializing the population: {e}")
 
     def generate_mutation_sequence(self, sequence_to_mutate, mutation_rate, chain):
         self.logger.debug("Generating a mutant sequence")
-        if not self.mutable_positions:
-            self.logger.error("No mutable positions provided")
-            raise ValueError("No mutable positions provided")
+        # if not self.mutable_positions:
+        #     self.logger.error("No mutable positions provided")
+        #     raise ValueError("No mutable positions provided")
         if not self.mutable_aa:
             self.logger.error("No mutable amino acids provided")
             raise ValueError("No mutable amino acids provided")
         new_aa = {}
         mut = []
         # Transform to a mutable sequence
-        mutable_seq = MutableSeq(sequence_to_mutate)
+        mutable_seq = list(sequence_to_mutate)
         self.logger.debug(f"Sequence_to_mutate: {sequence_to_mutate}")
         # Iterate over the aa in the mutable sequence
         for i, aa in enumerate(mutable_seq, start=0):
             # If the position is mutable and the mutation rate is met
-            if (
-                i in self.mutable_positions[chain]
-                and i in self.mutable_aa[chain]
-                and self.rng.random() <= mutation_rate
-            ):
+            rng = self.rng.random()
+            if i in self.mutable_aa[chain] and rng <= mutation_rate:
                 new_residues = [nuc for nuc in self.mutable_aa[chain][i] if nuc != aa]
                 new_aa[i] = self.rng.choice(new_residues)
-                mutable_seq[i - 1] = new_aa[i]
+                # abans hi havia un mutable_seq[i - 1]
+                mutable_seq[i] = new_aa[i]
                 mut.append((aa, i, new_aa[i]))
-        self.logger.debug(f"Mutated_sequence: {mutable_seq}")
-        return Seq(mutable_seq), mut
+        self.logger.debug(f"Mutated_sequence: {''.join(mutable_seq)}")
+        return "".join(mutable_seq), mut
 
     def generate_crossover_sequence(
         self,
@@ -220,7 +260,7 @@ class GeneticAlgorithm(Optimizer):
         crossover_type="uniform",
         sequences_pool=None,
         chain=None,
-    ) -> Seq:
+    ) -> str:
         # If no sequence were given, select two random sequences
         if sequence1 is None and sequence2 is None:
             sequence1 = random.choice(sequences_pool)
@@ -242,44 +282,49 @@ class GeneticAlgorithm(Optimizer):
         else:
             return self.uniform_crossover(sequence1, sequence2, chain)
 
-    def uniform_crossover(self, sequence1, sequence2, chain, percent_recomb=0.3) -> Seq:
+    def uniform_crossover(self, sequence1, sequence2, chain, percent_recomb=0.3) -> str:
         self.logger.debug("Performing a uniform crossover")
-        recombined_sequence = MutableSeq(sequence1)
-        for i in self.mutable_positions[chain]:
+        recombined_sequence = list(sequence1)
+        for i in self.mutable_aa[chain].keys():
             if self.rng.random() < percent_recomb:
                 recombined_sequence[i - 1] = sequence2[i - 1]
-        # self.logger.debug(f"Initial_sequences: 1.{sequence1}")
-        # self.logger.debug(f"Initial_sequences: 2.{sequence2}")
-        # self.logger.debug(f"  Recombined_sequence: {recombined_sequence}")
-        return Seq(recombined_sequence)
+            # self.logger.debug(f"Initial_sequences: 1.{sequence1}")
+            # self.logger.debug(f"Initial_sequences: 2.{sequence2}")
+            # self.logger.debug(f"  Recombined_sequence: {recombined_sequence}")
 
-    def two_point_crossover(self, sequence1, sequence2, start=None, end=None) -> Seq:
+        return "".join(recombined_sequence)
+
+    def two_point_crossover(
+        self, sequence1, sequence2, start=None, end=None, chain=None
+    ) -> str:
         self.logger.debug("Performing a two-point crossover")
-        recombined_sequence = MutableSeq(sequence1)
+        recombined_sequence = list(sequence1)
         if start is None:
             start = self.rng.randint(1, len(sequence1) + 1)
         if end is None:
             end = self.rng.randint(start, len(sequence1) + 1)
         for i in range(start, end + 1):
-            if i in self.mutable_positions:
+            if i in self.mutable_aa[chain].keys():
                 recombined_sequence[i - 1] = sequence2[i - 1]
-        self.logger.debug(f"Initial_sequences: 1.{sequence1}")
-        self.logger.debug(f"Initial_sequences: 2.{sequence2}")
-        self.logger.debug(f"  Recombined_sequence: {recombined_sequence}")
-        return Seq(recombined_sequence)
+        # self.logger.debug(f"Initial_sequences: 1.{sequence1}")
+        # self.logger.debug(f"Initial_sequences: 2.{sequence2}")
+        # self.logger.debug(f"  Recombined_sequence: {recombined_sequence}")
+        return "".join(recombined_sequence)
 
-    def single_point_crossover(self, sequence1, sequence2, crossover_point=None) -> Seq:
+    def single_point_crossover(
+        self, sequence1, sequence2, crossover_point=None, chain=None
+    ) -> str:
         self.logger.debug("Performing a single-point crossover")
-        recombined_sequence = MutableSeq(sequence1)
+        recombined_sequence = list(sequence1)
         if crossover_point is None:
             crossover_point = self.rng.randint(1, len(sequence1) + 1)
         for i in range(crossover_point, len(sequence1) + 1):
-            if i in self.mutable_positions:
+            if i in self.mutable_aa[chain].keys():
                 recombined_sequence[i - 1] = sequence2[i - 1]
-        self.logger.debug(f"Initial_sequences: 1.{sequence1}")
-        self.logger.debug(f"Initial_sequences: 2.{sequence2}")
-        self.logger.debug(f"  Recombined_sequence: {recombined_sequence}")
-        return Seq(recombined_sequence)
+        # self.logger.debug(f"Initial_sequences: 1.{sequence1}")
+        # self.logger.debug(f"Initial_sequences: 2.{sequence2}")
+        # self.logger.debug(f"  Recombined_sequence: {recombined_sequence}")
+        return "".join(recombined_sequence)
 
     def calculate_pareto_front(self, df, selected_columns, dimension=1):
         """Calculate the Pareto front from a DataFrame for maximization problems."""
@@ -306,10 +351,12 @@ class GeneticAlgorithm(Optimizer):
         population_size = df_to_empty.shape[0]
 
         # Changes the values by state
-        for state in metric_states:
-            df_to_empty[state] = df_to_empty[state].apply(
-                lambda x: -x if metric_states[state] == "Positive" else x
-            )
+        # Precompute the columns that need to be negated
+        columns_to_negate = [s for s in metric_states if metric_states[s] == "Positive"]
+        # Apply the negation using vectorized operations
+        df_to_empty[columns_to_negate] = df_to_empty[columns_to_negate].map(
+            lambda x: -x
+        )
 
         values = df_to_empty.values
         ranks = np.zeros(population_size, dtype=int)
@@ -407,14 +454,14 @@ class GeneticAlgorithm(Optimizer):
                     chain=chain,
                     index=self.data.nsequences(chain) + 1,
                     active=True,
-                    mutations=mut,
+                    mutations=None,
                     native=self.native,
                 ),
             )
             while not added:
-                self.logger.warning(
-                    f"Sequence {crossover_sequence} already in the data, generating a new one"
-                )
+                # self.logger.warning(
+                #     f"Sequence {crossover_sequence} already in the data, generating a new one"
+                # )
                 crossover_sequence = self.generate_crossover_sequence(
                     sequences_pool=parent_sequences, chain=chain
                 )
@@ -427,7 +474,7 @@ class GeneticAlgorithm(Optimizer):
                         chain=chain,
                         index=self.data.nsequences(chain) + 1,
                         active=True,
-                        mutations=mut,
+                        mutations=None,
                         native=self.native,
                     ),
                 )
@@ -435,6 +482,7 @@ class GeneticAlgorithm(Optimizer):
                 if n_tries > max_attempts:
                     self.logger.warning("Too many tries to generate a new sequence")
                     break
+                print(f"n_tries: {n_tries}")
                 n_tries += 1
 
             # If it's not possible to generate new sequences by recombination, try to mutate

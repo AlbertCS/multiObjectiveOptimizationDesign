@@ -126,6 +126,7 @@ class MultiObjectiveOptimization:
         self.folders = {}
         self.current_iteration = 0
         self.population_size = population_size
+        # self.sequences = {chain: {Sequence1.sequence: Sequence1, Sequence2.sequence: Sequence2}}
         self.sequences = {chain: {} for chain in self.chains}
         self.sequences_file_name = "sequences.pkl"
         self.data_frame_file_name = "data_frame.pkl"
@@ -164,7 +165,6 @@ class MultiObjectiveOptimization:
                     seed=seed,
                     debug=debug,
                     data=data,
-                    mutable_positions=self.mutable_positions,
                     mutable_aa=self.mutable_aa,
                 )
 
@@ -273,7 +273,8 @@ class MultiObjectiveOptimization:
                 with open(sequences_pkl, "rb") as f:
                     sequences_iter = pickle.load(f)
                 for chain in self.chains:
-                    self.sequences[chain].extend(sequences_iter[chain])
+                    # self.sequences[chain] = {**self.sequences[chain], **sequences_iter[chain]}
+                    self.sequences[chain].update(sequences_iter[chain])
                 self.current_iteration += 1
 
                 continue
@@ -339,9 +340,9 @@ class MultiObjectiveOptimization:
 
     def select_parents(self, evaluated_sequences_df, percent_of_parents=0.25):
         # sort by rank, keep the 25% of the sequences as parents
-        sequences_ranked = evaluated_sequences_df.sort_values(by="Rank")
+        sequences_ranked = evaluated_sequences_df.sort_values(by="Ranks")
         top = sequences_ranked.head(int(len(sequences_ranked) * percent_of_parents))
-        top_list = [Seq(seq) for seq in top["Sequence"].tolist()]
+        top_list = [seq for seq in top["Sequence"].tolist()]
 
         return top_list
 
@@ -476,7 +477,7 @@ class MultiObjectiveOptimization:
                 self.logger.info("Evaluating and ranking the population")
                 # Returns a dataframe with the sequences and the metrics, and a column with the rank
                 evaluated_sequences_df[chain] = self.optimizer.eval_population(
-                    metric_df, metric_states
+                    df=metric_df, metric_states=metric_states
                 )
 
             # TODO save the sequences to the data class, to accumulate the sequences

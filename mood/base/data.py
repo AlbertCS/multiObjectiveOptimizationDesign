@@ -12,7 +12,7 @@ class AlgorithmDataSingleton:
     For now, the sequences dictionary will be persistent and the dataFrame will be reset with each iteration.
     """
 
-    def __new__(cls, sequences=None, chains=None):
+    def __new__(cls, sequences={}, chains=[]):
         if cls._instance is None:
             cls._instance = super(AlgorithmDataSingleton, cls).__new__(cls)
             # Initialize the instance attributes
