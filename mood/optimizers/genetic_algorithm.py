@@ -1,3 +1,4 @@
+import os
 import random
 from typing import Any, Dict, List
 
@@ -20,7 +21,8 @@ class GeneticAlgorithm(Optimizer):
         mutation_seq_percent: float = 0.5,
         # mutable_positions: List[int] = [],
         mutable_aa: Dict[int, Any] = {},
-        rosetta_mover: bool = False,  # Rosetta minimization mover to decide if the mutations are accepted
+        eval_mutations: bool = False,  # Rosetta minimization mover to decide if the mutations are accepted
+        eval_mutations_params: Dict[str, Any] = {},
     ) -> None:
         super().__init__(
             population_size=population_size,
@@ -40,6 +42,134 @@ class GeneticAlgorithm(Optimizer):
         self.child_sequences = []
         self.crossoverTypes = ["uniform", "two_point", "single_point"]
         self.native = None
+
+        if eval_mutations:
+            self.eval_mutations_params = eval_mutations_params
+            self.native_pdb = eval_mutations_params["native_pdb"]
+            eval_mutations_params["cst_file"]
+            
+            import pyrosetta as prs
+
+            if eval_mutations_params["params_folder"] != None:
+                patches = [
+                    eval_mutations_params["params_folder"] + "/" + x
+                    for x in os.listdir(eval_mutations_params["params_folder"])
+                    if x.endswith(".txt")
+                ]
+                params = [
+                    eval_mutations_params["params_folder"] + "/" + x
+                    for x in os.listdir(eval_mutations_params["params_folder"])
+                    if x.endswith(".params")
+                ]
+                if patches == []:
+                    patches = None
+                if params == []:
+                    raise ValueError(
+                        f"Params files were not found in the given folder: {eval_mutations_params["params_folder"]}!"
+                    )
+            params = " ".join(params)
+            patches = " ".join(patches)
+
+            options = f"-relax:default_repeats 1 -constant_seed true -jran {eval_mutations_params["seed"]}"
+            options += f" -extra_res_fa {params} -extra_patch_fa {patches}"
+
+            prs.pyrosetta.init(options=options)
+            
+    def local_relax(
+        self,
+        residues=None,
+        moving_chain=None,
+        neighbour_distance=10,
+        minimization_steps=100,
+        min_energy_threshold=2,
+    ):
+        import pyrosetta as prs
+        residues = residues or []
+        
+        native_pose = prs.pyrosetta.pose_from_pdb(self.native_pdb)
+        min_pose = native_pose.clone()
+
+        sfxn = prs.rosetta.core.scoring.ScoreFunctionFactory.create_score_function("ref2015")
+        
+        fastrelax_mover = prs.rosetta.protocols.relax.FastRelax()
+        fastrelax_mover.set_scorefxn(sfxn)
+
+        if moving_chain is not None:
+            chain_indexes = []
+            for r in range(1, native_pose.total_residue() + 1):
+                _, chain = native_pose.pdb_info().pose2pdb(r).split()
+                if chain == moving_chain:
+                    chain_indexes.append(r)
+        else:
+            chain_indexes = []
+
+        # indexes seria mutations
+        ct_chain_selector = prs.rosetta.core.select.residue_selector.ResidueIndexSelector()
+        indexes = chain_indexes + residues
+        ct_chain_selector.set_index(",".join([str(x) for x in indexes]))
+
+        nbr_selector = (
+            prs.rosetta.core.select.residue_selector.NeighborhoodResidueSelector()
+        )
+
+        # Residue of the mutation
+        nbr_selector.set_focus_selector(ct_chain_selector)
+        nbr_selector.set_include_focus_in_subset(
+            True
+        )  # This includes the peptide residues in the selection
+        nbr_selector.set_distance(neighbour_distance)
+
+        enable_mm = prs.rosetta.core.select.movemap.move_map_action(1)
+
+        mmf_relax = prs.rosetta.core.select.movemap.MoveMapFactory()
+        mmf_relax.all_bb(False)
+        mmf_relax.add_bb_action(enable_mm, nbr_selector)
+
+        ## Deactivate side-chain except for the selected chain during relax + neighbours
+        mmf_relax.all_chi(False)
+        mmf_relax.add_chi_action(enable_mm, nbr_selector)
+
+        # Define RLT to prevent repacking of residues (fix side chains)
+        prevent_repacking_rlt = prs.rosetta.core.pack.task.operation.PreventRepackingRLT()
+        # Define RLT to only repack residues (movable side chains but fixed sequence)
+        restrict_repacking_rlt = (
+            prs.rosetta.core.pack.task.operation.RestrictToRepackingRLT()
+        )
+
+        # Prevent repacking of everything but CT, peptide and their neighbours
+        prevent_subset_repacking = (
+            prs.rosetta.core.pack.task.operation.OperateOnResidueSubset(
+                prevent_repacking_rlt, nbr_selector, True
+            )
+        )
+        # Allow repacking of peptide and neighbours
+        restrict_subset_to_repacking_for_sampling = (
+            prs.rosetta.core.pack.task.operation.OperateOnResidueSubset(
+                restrict_repacking_rlt, nbr_selector
+            )
+        )
+
+        tf_sampling = prs.rosetta.core.pack.task.TaskFactory()
+        tf_sampling.push_back(prevent_subset_repacking)
+        tf_sampling.push_back(restrict_subset_to_repacking_for_sampling)
+
+        fastrelax_mover.set_movemap_factory(mmf_relax)
+        fastrelax_mover.set_task_factory(tf_sampling)
+
+        initial_energy = sfxn(min_pose)
+        for step in range(1, minimization_steps + 1):
+            fastrelax_mover.apply(min_pose)
+            final_energy = sfxn(min_pose)
+            d_energy = final_energy - initial_energy
+            if abs(d_energy) < abs(min_energy_threshold):
+                break
+            initial_energy = final_energy
+
+        if step == minimization_steps - 1:
+            print(f"Maximum number of relax iterations ({minimization_steps}) reached.")
+            print("Energy convergence failed!")
+
+        return min_pose
 
     def init_population(self, chain, sequences_initial, max_attempts=1000):
         self.logger.info("Initializing the population")
@@ -253,6 +383,15 @@ class GeneticAlgorithm(Optimizer):
         self.logger.debug(f"Mutated_sequence: {''.join(mutable_seq)}")
         return "".join(mutable_seq), mut
 
+    def mutate_sequence_recombination(
+        self, chain, recombined_sequence, max_mutations_recomb=1
+    ):
+        for _ in range(self.rng.choice(list(range(max_mutations_recomb + 1)))):
+            position = self.rng.choice(list(self.mutable_aa[chain].keys()))
+            new_aa = self.rng.choice(self.mutable_aa[chain][position])
+            recombined_sequence[position - 1] = new_aa
+        return recombined_sequence
+
     def generate_crossover_sequence(
         self,
         sequence1=None,
@@ -282,7 +421,9 @@ class GeneticAlgorithm(Optimizer):
         else:
             return self.uniform_crossover(sequence1, sequence2, chain)
 
-    def uniform_crossover(self, sequence1, sequence2, chain, percent_recomb=0.3) -> str:
+    def uniform_crossover(
+        self, sequence1, sequence2, chain, percent_recomb=0.3, n=1
+    ) -> str:
         self.logger.debug("Performing a uniform crossover")
         recombined_sequence = list(sequence1)
         for i in self.mutable_aa[chain].keys():
@@ -423,6 +564,7 @@ class GeneticAlgorithm(Optimizer):
         max_attempts=1000,
         mutation_rate=0.06,
         chain=None,
+        max_mutations_recomb=1,
     ):
         self.logger.info("Generating the child population")
         # Initialize the child population list
@@ -445,6 +587,11 @@ class GeneticAlgorithm(Optimizer):
             # Crossover
             crossover_sequence = self.generate_crossover_sequence(
                 sequences_pool=parent_sequences, chain=chain
+            )
+            crossover_sequence = self.mutate_sequence_recombination(
+                chain=chain,
+                recombined_sequence=crossover_sequence,
+                max_mutations_recomb=max_mutations_recomb,
             )
             # Add the new sequence to the data object
             added = self.data.add_sequence(

@@ -13,48 +13,32 @@ from mood.multiObjectiveOptimization import MultiObjectiveOptimization
 class TestmultiObjectiveOptimization(unittest.TestCase):
     def setUp(self):
         # TODO send all the data to the repo
-        # TODO add option to use params and patches
         data = AlgorithmDataSingleton()
         optimizer = "genetic_algorithm"
-        params_folder = "PET_params"
-        if params_folder != None:
-            patches = [
-                params_folder + "/" + x
-                for x in os.listdir(params_folder)
-                if x.endswith(".txt")
-            ]
-            params = [
-                params_folder + "/" + x
-                for x in os.listdir(params_folder)
-                if x.endswith(".params")
-            ]
-            if patches == []:
-                patches = None
-            if params == []:
-                raise ValueError(
-                    f"Params files were not found in the given folder: {params_folder}!"
-                )
-
+        params_folder = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/Felip9/PET_params"
         cpus = 6
-        native_pdb = ""
-        distances_file = ""
-        rose = RosettaMetrics(
-            params_folder=params_folder,
-            cpus=cpus,
-            seed=1235,
-            native_pdb=native_pdb,
-            distances_file=distances_file,
-        )
-        metrics = []
+        native_pdb = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/Felip9/FeLip9-PET-1.pdb"
+        distances_file = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/distances.json"
+        cst_file = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/Felip9/FeLip9-PET-1_CA.cst"
+        metrics = [
+            RosettaMetrics(
+                params_folder=params_folder,
+                cpus=cpus,
+                seed=1235,
+                native_pdb=native_pdb,
+                distances_file=distances_file,
+                cst_file=cst_file,
+            )
+        ]
         debug = True
         max_iteration = 5
         population_size = 20
         seed = 1235
 
         chains = ["A"]
-        mutable_positions = {
-            "A": [34, 36, 55, 66, 70, 113, 120, 121, 122, 155, 156, 184]
-        }
+        # mutable_positions = {
+        #     "A": [34, 36, 55, 66, 70, 113, 120, 121, 122, 155, 156, 184]
+        # }
         mutable_aa = {
             "A": {
                 34: ["H", "D", "Q", "S", "K", "M", "F", "L", "T", "A", "C"],
@@ -77,10 +61,8 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             metrics=metrics,
             debug=debug,
             max_iteration=max_iteration,
-            pdb=pdb,
             chains=chains,
             data=data,
-            mutable_positions=mutable_positions,
             mutable_aa=mutable_aa,
             folder_name=folder_name,
             seed=seed,

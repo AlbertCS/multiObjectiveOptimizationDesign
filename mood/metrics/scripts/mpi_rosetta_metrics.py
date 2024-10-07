@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 import pickle
 
@@ -236,9 +237,11 @@ class Mpi_relax:
     def main(
         self,
         job_output="output_relax/decoy",
-        input_file="sequences.txt",
-        distances_pkl=None,
+        sequences="sequences.txt",
+        distance_dict=None,
         native_pdb=None,
+        cst_file=None,
+        atom_pair_constraint_weight=1,
     ):
         # Initialize MPI
         comm = MPI.COMM_WORLD
@@ -249,7 +252,7 @@ class Mpi_relax:
         # List of sequences to be relaxed
         sequences = []
         # Open the file in read mode
-        with open(input_file, "r") as file:
+        with open(sequences, "r") as file:
             # Read the contents of the file
             lines = file.readlines()
             # Iterate over each line
@@ -259,6 +262,27 @@ class Mpi_relax:
 
         # Initialize native pose
         native_pose = prs.pyrosetta.pose_from_pdb(native_pdb)
+
+        for key, value in distances.items():
+            if len(value[0]) == 3:
+                natom1 = native_pose.pdb_info().pdb2pose(value[0][0], value[0][1])
+                natom2 = native_pose.pdb_info().pdb2pose(value[1][0], value[1][1])
+                distances[key] = [(natom1, value[0][2]), (natom2, value[1][2])]
+
+        if cst_file is not None:
+            sfxn.set_weight(rosetta.core.scoring.ScoreType.res_type_constraint, 1)
+            # Define catalytic constraints
+            set_constraints = rosetta.protocols.constraint_movers.ConstraintSetMover()
+            # Add constraint file
+            set_constraints.constraint_file(cst_file)
+            # Add atom_pair_constraint_weight ScoreType
+            sfxn.set_weight(
+                rosetta.core.scoring.ScoreType.atom_pair_constraint,
+                atom_pair_constraint_weight,
+            )
+            # Turn on constraint with the mover
+            set_constraints.add_constraints(True)
+            set_constraints.apply(native_pose)
 
         # Initialize score function and relax mover
         sfxn = prs.rosetta.core.scoring.ScoreFunctionFactory.create_score_function(
@@ -276,9 +300,6 @@ class Mpi_relax:
         salt_bridges_calculator = (
             prs.rosetta.protocols.pose_metric_calculators.SaltBridgeCalculator()
         )
-
-        # Read distances
-        distance_dict = pickle.load(open(distances_pkl, "rb"))
 
         # Distribute sequences equally among processors
         num_sequences = len(sequences)
@@ -405,7 +426,7 @@ def parse_arguments():
         "--seed", type=int, default=12345, help="Random seed for the job"
     )
     parser.add_argument(
-        "--input_file",
+        "--sequences",
         type=str,
         default="sequences.txt",
         help="Input file containing sequences",
@@ -417,14 +438,42 @@ def parse_arguments():
         required=True,
         help="File containing distances between residues",
     )
+    parser.add_argument(
+        "--cst_file",
+        type=str,
+        default=None,
+        help="File containing constraints for the job",
+    )
+
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_arguments()
 
+    if args.params_folder != None:
+        patches = [
+            args.params_folder + "/" + x
+            for x in os.listdir(args.params_folder)
+            if x.endswith(".txt")
+        ]
+        params = [
+            args.params_folder + "/" + x
+            for x in os.listdir(args.params_folder)
+            if x.endswith(".params")
+        ]
+        if patches == []:
+            patches = None
+        if params == []:
+            raise ValueError(
+                f"Params files were not found in the given folder: {args.params_folder}!"
+            )
+
+    # from a list of path files, create a string with all the paths separated by a coma
+    params = ",".join(params)
+
     options = f"-relax:default_repeats 1 -constant_seed true -jran {args.seed}"
-    options += f" -extra_res_path {args.params_folder}"
+    options += f" -extra_res_fa {params} -extra_patch_fa {patches}"
 
     prs.pyrosetta.init(options=options)
 
@@ -433,9 +482,20 @@ if __name__ == "__main__":
     if not os.path.exists(args.job_output.split("/")[0]):
         os.makedirs(args.job_output.split("/")[0])
 
+    if not os.path.exists(args.native_pdb):
+        raise ValueError(f"The native pdb file {args.native_pdb} does not exist")
+
+    if args.distances.endswith(".pkl"):
+        with open(args.distances, "rb") as file:
+            distances = pickle.load(file)
+    elif args.distances.endswith(".json"):
+        with open(args.distances, "rb") as file:
+            distances = json.load(file)
+
     mpi_relax.main(
         job_output=args.job_output,
-        input_file=args.input_file,
+        sequences=args.sequences,
         native_pdb=args.native_pdb,
-        distances_pkl=args.distances,
+        distances_file=distances,
+        cst_file=args.cst_file,
     )

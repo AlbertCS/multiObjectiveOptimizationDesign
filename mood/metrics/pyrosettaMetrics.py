@@ -9,7 +9,7 @@ from mood.metrics import Metric
 
 
 class RosettaMetrics(Metric):
-    def __init__(self, params_folder, cpus, seed, native_pdb, distances_file):
+    def __init__(self, params_folder, cpus, seed, native_pdb, distances_file, cst_file):
         super().__init__()
         self.state = {
             "RelaxEnergy": "negative",
@@ -25,6 +25,7 @@ class RosettaMetrics(Metric):
         self.seed = seed
         self.native_pdb = native_pdb
         self.distances_file = distances_file
+        self.cst_file = cst_file
 
     def _copyScriptFile(
         self, output_folder, script_name, no_py=False, subfolder=None, hidden=True
@@ -82,12 +83,13 @@ class RosettaMetrics(Metric):
             proc = subprocess.Popen(
                 [
                     f"mpirun -np {self.cpus}",
-                    "python ",
+                    "python",
                     "mpi_rosetta_metrics.py",
                     f"--seed {self.seed}",
                     f"--params_folder {self.params_folder}",
                     f"--native_pdb {self.native_pdb}",
                     f"--distances {self.distances_file}",
+                    f"--cst_file {self.cst_file}",
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

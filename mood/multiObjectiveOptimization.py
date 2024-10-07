@@ -98,7 +98,6 @@ class MultiObjectiveOptimization:
         chains="A",
         data=None,
         mutation_rate=None,
-        mutable_positions=None,
         folder_name="mood_job",
         mutable_aa=None,
         population_size=100,
@@ -132,15 +131,10 @@ class MultiObjectiveOptimization:
         self.data_frame_file_name = "data_frame.pkl"
 
         if offset is None:
-            self.mutable_positions = mutable_positions
             self.mutable_aa = mutable_aa
         else:
-            self.mutable_positions = {
-                chain: [pos - offset for pos in positions]
-                for chain, positions in mutable_positions.items()
-            }
             self.mutable_aa = {
-                chain: {pos - 4: aa for pos, aa in positions.items()}
+                chain: {pos - offset: aa for pos, aa in positions.items()}
                 for chain, positions in mutable_aa.items()
             }
         if isinstance(chains, str):
@@ -150,7 +144,7 @@ class MultiObjectiveOptimization:
 
         for chain in self.chains:
             if mutation_rate is None:
-                self.mutation_rate[chain] = 1 / len(self.mutable_positions[chain])
+                self.mutation_rate[chain] = 1 / len(self.mutable_aa[chain].keys())
 
         # Initialize the optimizer and metrics
         available_optimizers = ["genetic_algorithm"]
@@ -356,7 +350,6 @@ class MultiObjectiveOptimization:
             "chains": self.chains,
             "seed": self.seed,
             "mutation_rate": self.mutation_rate,
-            "mutable_positions": self.mutable_positions,
             "mutable_aa": self.mutable_aa,
             "population_size": self.population_size,
         }
@@ -376,7 +369,6 @@ class MultiObjectiveOptimization:
         self.chains = info["chains"]
         self.seed = info["seed"]
         self.mutation_rate = info["mutation_rate"]
-        self.mutable_positions = info["mutable_positions"]
         self.mutable_aa = info["mutable_aa"]
         self.population_size = info["population_size"]
 
@@ -448,7 +440,9 @@ class MultiObjectiveOptimization:
                     self.logger.info("Generating the child population")
                     sequences_to_evaluate[chain] = (
                         self.optimizer.generate_child_population(
-                            parents_sequences[chain], chain=chain
+                            parents_sequences[chain],
+                            chain=chain,
+                            max_mutations_recomb=1,
                         )
                     )
 
