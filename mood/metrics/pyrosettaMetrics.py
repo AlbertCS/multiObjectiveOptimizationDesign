@@ -52,7 +52,7 @@ class RosettaMetrics(Metric):
             script_name = script_name.replace(".py", "")
 
         if hidden:
-            output_path = output_folder + "/._" + script_name
+            output_path = output_folder + "/." + script_name
         else:
             output_path = output_folder + "/" + script_name
 
@@ -60,39 +60,49 @@ class RosettaMetrics(Metric):
             for l in script_file:
                 sof.write(l)
 
-    def compute(self, sequences):
+    def compute(self, sequences, iteration, folder_name):
 
         # Create df
         df = pd.DataFrame(sequences, columns=["Sequence"])
 
         sequences = df["Sequence"].tolist()
 
+        output_folder = f"{folder_name}/{str(iteration).zfill(3)}/relax"
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+
         # Specify the output file name
-        output_file = "sequences.txt"
+        sequences_file = f"{output_folder}/sequences.txt"
         # Open the file in write mode
-        with open(output_file, "w") as file:
+        with open(sequences_file, "w") as file:
             # Iterate over the sequences
             for sequence in sequences:
                 # Write each sequence to the file
                 file.write(sequence + "\n")
 
         # Copy the script to be run in mpi
-        self._copyScriptFile(script_name="mpi_rosetta_metrics.py", output_folder=".")
+        self._copyScriptFile(
+            script_name="mpi_rosetta_metrics.py", output_folder=folder_name
+        )
+
+        # TODO may be a good idea to copy the params folder to the input folder of the mood
 
         try:
+            cmd = f"mpirun -np {self.cpus} "
+            cmd += f"python {folder_name}/.mpi_rosetta_metrics.py "
+            cmd += f"--seed {self.seed} "
+            cmd += f"--output_folder {output_folder} "
+            cmd += f"--sequences_file {sequences_file} "
+            cmd += f"--params_folder {self.params_folder} "
+            cmd += f"--native_pdb {self.native_pdb} "
+            cmd += f"--distances {self.distances_file} "
+            cmd += f"--cst_file {self.cst_file} "
+
             proc = subprocess.Popen(
-                [
-                    f"mpirun -np {self.cpus}",
-                    "python",
-                    "mpi_rosetta_metrics.py",
-                    f"--seed {self.seed}",
-                    f"--params_folder {self.params_folder}",
-                    f"--native_pdb {self.native_pdb}",
-                    f"--distances {self.distances_file}",
-                    f"--cst_file {self.cst_file}",
-                ],
+                cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                shell=True,
             )
             stdout, stderr = proc.communicate()
             print("Output:", stdout.decode())
@@ -100,10 +110,10 @@ class RosettaMetrics(Metric):
         except Exception as e:
             raise Exception(f"An error occurred while running the Rosetta metrics: {e}")
 
-        if not os.path.exists("sequences_energy.csv"):
+        if not os.path.exists(f"{output_folder}/rosetta_scores.csv"):
             raise ValueError("The Rosetta metrics did not run successfully")
         else:
-            df = pd.read_csv("sequences_energy.csv")
+            df = pd.read_csv(f"{output_folder}/rosetta_scores.csv")
             # Add the sequence column
             df["Sequence"] = sequences
 

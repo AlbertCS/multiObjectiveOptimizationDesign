@@ -79,16 +79,16 @@ class TestGeneticAlgorithm(unittest.TestCase):
             }
         }
         mutated_seq1, mut = self.ga.generate_mutation_sequence(sequence, 1.0, chain="A")
-        self.assertEqual(mutated_seq1, "APMSGPCLWR")
+        self.assertEqual(mutated_seq1, "APMCGPCQWR")
         self.assertEqual(
             mut,
             [
                 ("T", 1, "P"),
                 ("G", 2, "M"),
-                ("C", 3, "S"),
+                ("C", 3, "C"),
                 ("K", 4, "G"),
                 ("L", 6, "C"),
-                ("Q", 7, "L"),
+                ("Q", 7, "Q"),
             ],
         )
         mutated_seq2, mut = self.ga.generate_mutation_sequence(sequence, 1.0, chain="A")

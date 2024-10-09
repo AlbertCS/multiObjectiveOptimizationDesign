@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import unittest
@@ -12,14 +13,13 @@ from mood.multiObjectiveOptimization import MultiObjectiveOptimization
 
 class TestmultiObjectiveOptimization(unittest.TestCase):
     def setUp(self):
-        # TODO send all the data to the repo
         data = AlgorithmDataSingleton()
         optimizer = "genetic_algorithm"
-        params_folder = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/Felip9/PET_params"
-        cpus = 6
-        native_pdb = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/Felip9/FeLip9-PET-1.pdb"
-        distances_file = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/distances.json"
-        cst_file = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/Felip9/FeLip9-PET-1_CA.cst"
+        params_folder = "tests/data/Felip9/PET_params"
+        cpus = 4
+        native_pdb = "tests/data/Felip9/FeLip9-PET-1.pdb"
+        distances_file = "tests/data/distances.json"
+        cst_file = "tests/data/Felip9/FeLip9-PET-1_CA.cst"
         metrics = [
             RosettaMetrics(
                 params_folder=params_folder,
@@ -39,35 +39,28 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         # mutable_positions = {
         #     "A": [34, 36, 55, 66, 70, 113, 120, 121, 122, 155, 156, 184]
         # }
-        mutable_aa = {
-            "A": {
-                34: ["H", "D", "Q", "S", "K", "M", "F", "L", "T", "A", "C"],
-                36: ["R", "E", "D", "K", "A", "M", "S", "H", "L"],
-                55: ["A", "Q", "E", "M", "L", "V", "C", "D", "K", "S", "F"],
-                66: ["Q", "R", "E", "A", "M", "L", "S", "F", "H"],
-                70: ["Q", "D", "S", "H", "T", "M", "A", "F", "R", "N", "V", "C", "E"],
-                113: ["E", "D", "H", "Q", "S", "A", "C", "K", "N", "T", "V", "M"],
-                120: ["S", "D", "H", "Q", "T", "C", "G", "A", "R", "K"],
-                121: ["D", "S", "H", "T", "C", "V", "Y", "K", "Q", "F"],
-                122: ["S", "H", "D", "K", "M", "R", "T", "A"],
-                155: ["L", "C", "F", "M", "S", "A", "H", "I", "T"],
-                156: ["H", "S", "T", "C", "D", "V"],
-                184: ["K", "Q", "A", "R"],
-            }
-        }
+        with open(
+            "tests/data/Felip9/design_library_glide.json",
+            "r",
+        ) as f:
+            design = json.load(f)
+        mutable_aa = {"A": design}
         folder_name = "mood_job"
+        if os.path.exists(folder_name):
+            shutil.rmtree(folder_name)
         self.moo = MultiObjectiveOptimization(
             optimizer=optimizer,
             metrics=metrics,
             debug=debug,
             max_iteration=max_iteration,
+            native_pdb=native_pdb,
             chains=chains,
             data=data,
             mutable_aa=mutable_aa,
             folder_name=folder_name,
             seed=seed,
             population_size=population_size,
-            offset=3,
+            offset=1,
         )
         if os.path.exists("mood_job"):
             shutil.rmtree("mood_job")

@@ -37,7 +37,7 @@ class Mpi_relax:
 
         mean_energy = sum(energy) / len(energy)
 
-        return test_pose, mean_energy
+        return test_pose, energy_final
 
     def calculate_Apo_Score(self, pose, sfxn, ligand_chain) -> float:
         """
@@ -236,8 +236,8 @@ class Mpi_relax:
 
     def main(
         self,
-        job_output="output_relax/decoy",
-        sequences="sequences.txt",
+        output_folder="output_relax",
+        sequences_file="sequences.txt",
         distance_dict=None,
         native_pdb=None,
         cst_file=None,
@@ -252,7 +252,7 @@ class Mpi_relax:
         # List of sequences to be relaxed
         sequences = []
         # Open the file in read mode
-        with open(sequences, "r") as file:
+        with open(sequences_file, "r") as file:
             # Read the contents of the file
             lines = file.readlines()
             # Iterate over each line
@@ -263,12 +263,24 @@ class Mpi_relax:
         # Initialize native pose
         native_pose = prs.pyrosetta.pose_from_pdb(native_pdb)
 
+        # Get the distances dictionary
         for key, value in distances.items():
             if len(value[0]) == 3:
                 natom1 = native_pose.pdb_info().pdb2pose(value[0][0], value[0][1])
                 natom2 = native_pose.pdb_info().pdb2pose(value[1][0], value[1][1])
                 distances[key] = [(natom1, value[0][2]), (natom2, value[1][2])]
 
+        # Initialize score function and relax mover
+        sfxn = prs.rosetta.core.scoring.ScoreFunctionFactory.create_score_function(
+            "ref2015"
+        )
+        sfxn_scorer = (
+            prs.rosetta.core.scoring.ScoreFunctionFactory.create_score_function(
+                "ref2015"
+            )
+        )
+
+        # Apply constraints to the energy function
         if cst_file is not None:
             sfxn.set_weight(rosetta.core.scoring.ScoreType.res_type_constraint, 1)
             # Define catalytic constraints
@@ -284,19 +296,18 @@ class Mpi_relax:
             set_constraints.add_constraints(True)
             set_constraints.apply(native_pose)
 
-        # Initialize score function and relax mover
-        sfxn = prs.rosetta.core.scoring.ScoreFunctionFactory.create_score_function(
-            "ref2015"
-        )
+        # Initialize the fastRelax mover
         fastrelax_mover = prs.rosetta.protocols.relax.FastRelax()
         fastrelax_mover.set_scorefxn(sfxn)
 
         # Initialize filters and calculators
+        # initialize hydrophobic surface calculator
         hydro_filter = (
             prs.rosetta.protocols.denovo_design.filters.ExposedHydrophobicsFilter()
         )
         hydro_filter.set_sasa_cutoff(0)
         hydro_filter.set_threshold(-1)
+        # initialize Salt bridge calculator
         salt_bridges_calculator = (
             prs.rosetta.protocols.pose_metric_calculators.SaltBridgeCalculator()
         )
@@ -308,31 +319,41 @@ class Mpi_relax:
         start_index = rank * sequences_per_proc + min(rank, remainder)
         end_index = start_index + sequences_per_proc + (1 if rank < remainder else 0)
 
-        # Each processor relaxes its assigned sequences
+        # Initialize all the datastructures
         relaxed_energies = []
         interface_scores = []
         apo_scores = []
         hydrophobic_scores = []
         n_salt_bridges_iter = []
         distances_res = []
+        # Each processor relaxes its assigned sequences
         for i in range(start_index, end_index):
             jd = prs.PyJobDistributor(
-                f"{job_output}_R{rank}_I{i}", nstruct=1, scorefxn=sfxn
+                f"{output_folder}/decoy_R{rank}_I{i}", nstruct=1, scorefxn=sfxn_scorer
             )
+            # Get the mutated sequence translated to a pose
             pose = self.mutate_native_pose(native_pose, sequences[i])
+            # Relax the pose
             test_pose, mean_energy = self.relax_sequence(
                 pose=pose,
                 jd=jd,
                 fastrelax_mover=fastrelax_mover,
-                sfxn=sfxn,
+                sfxn=sfxn_scorer,
             )
-            apo_score = self.calculate_Apo_Score(test_pose, sfxn, "L")
-            interface_score = self.calculate_Interface_Score(test_pose, sfxn, "L")
+            # Get the apo score
+            apo_score = self.calculate_Apo_Score(test_pose, sfxn_scorer, "L")
+            # Get the binding score
+            interface_score = self.calculate_Interface_Score(
+                test_pose, sfxn_scorer, "L"
+            )
+            # Apply the hydrophobic filter and get the score
             hydro_filter.apply(test_pose)
             hydrophobic_score = hydro_filter.compute(test_pose)
+            # Calculate the salt bridges
             n_salt_bridges = salt_bridges_calculator.get(
                 key="salt_bridge", this_pose=test_pose
             )
+            # Calculate the distances
             res_distance = distance_dict.copy()
             for key, value in distance_dict.items():
                 res_distance[key] = self.distance(pose, value[0], value[1])
@@ -348,7 +369,7 @@ class Mpi_relax:
 
         # Delete the pdbs
         # Construct the pattern to match the files
-        pattern = f"{job_output}_R{rank}_*.pdb"
+        pattern = f"{output_folder}/decoy_R{rank}_*.pdb"
 
         # Find all files matching the pattern
         files_to_remove = glob.glob(pattern)
@@ -395,6 +416,7 @@ class Mpi_relax:
             )
             df_distances = df_distances.rename(columns=lambda x: "dist_" + x)
 
+            # Create the final df with all the values
             df = df_relaxed_energies
             df = df.merge(df_interface_scores, on="Index")
             df = df.merge(df_apo_scores, on="Index")
@@ -402,7 +424,7 @@ class Mpi_relax:
             df = df.merge(df_salt_bridges, on="Index")
             df = df.merge(df_distances, left_on="Index", right_index=True)
 
-            df.to_csv("rosetta_scores.csv", index=False)
+            df.to_csv(f"{output_folder}/rosetta_scores.csv", index=False)
 
 
 import argparse
@@ -411,9 +433,9 @@ import argparse
 def parse_arguments():
     parser = argparse.ArgumentParser(description="MPI Relaxation Script")
     parser.add_argument(
-        "--job_output",
+        "--output_folder",
         type=str,
-        default="output_relax/decoy",
+        default="output_relax",
         help="Output directory for the job",
     )
     parser.add_argument(
@@ -426,7 +448,7 @@ def parse_arguments():
         "--seed", type=int, default=12345, help="Random seed for the job"
     )
     parser.add_argument(
-        "--sequences",
+        "--sequences_file",
         type=str,
         default="sequences.txt",
         help="Input file containing sequences",
@@ -469,8 +491,12 @@ if __name__ == "__main__":
                 f"Params files were not found in the given folder: {args.params_folder}!"
             )
 
-    # from a list of path files, create a string with all the paths separated by a coma
-    params = ",".join(params)
+    # Prom a list of path files, create a string with all the paths separated by a space
+    params = " ".join(params)
+    patches = " ".join(patches)
+
+    print(f"Params:\n{params}")
+    print(f"Patches:\n{patches}")
 
     options = f"-relax:default_repeats 1 -constant_seed true -jran {args.seed}"
     options += f" -extra_res_fa {params} -extra_patch_fa {patches}"
@@ -479,8 +505,8 @@ if __name__ == "__main__":
 
     mpi_relax = Mpi_relax()
 
-    if not os.path.exists(args.job_output.split("/")[0]):
-        os.makedirs(args.job_output.split("/")[0])
+    if not os.path.exists(args.output_folder):
+        os.makedirs(args.output_folder)
 
     if not os.path.exists(args.native_pdb):
         raise ValueError(f"The native pdb file {args.native_pdb} does not exist")
@@ -489,13 +515,16 @@ if __name__ == "__main__":
         with open(args.distances, "rb") as file:
             distances = pickle.load(file)
     elif args.distances.endswith(".json"):
-        with open(args.distances, "rb") as file:
+        with open(args.distances, "r") as file:
             distances = json.load(file)
 
+    if not os.path.exists(args.sequences_file):
+        raise ValueError(f"The sequence file {args.sequences_file} does not exists")
+
     mpi_relax.main(
-        job_output=args.job_output,
-        sequences=args.sequences,
+        output_folder=args.output_folder,
+        sequences_file=args.sequences_file,
         native_pdb=args.native_pdb,
-        distances_file=distances,
+        distance_dict=distances,
         cst_file=args.cst_file,
     )

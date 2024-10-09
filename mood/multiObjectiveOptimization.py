@@ -94,7 +94,7 @@ class MultiObjectiveOptimization:
         debug: bool = False,
         max_iteration: int = 100,
         seed=12345,
-        pdb=None,
+        native_pdb=None,
         chains="A",
         data=None,
         mutation_rate=None,
@@ -111,7 +111,7 @@ class MultiObjectiveOptimization:
         self.max_iteration = max_iteration
         self.seed = seed
         random.seed(seed)
-        self.pdb = pdb
+        self.native_pdb = native_pdb
         self.chains = chains
         if data is None:
             self.data = AlgorithmDataSingleton()
@@ -134,7 +134,7 @@ class MultiObjectiveOptimization:
             self.mutable_aa = mutable_aa
         else:
             self.mutable_aa = {
-                chain: {pos - offset: aa for pos, aa in positions.items()}
+                chain: {int(pos) - offset: aa for pos, aa in positions.items()}
                 for chain, positions in mutable_aa.items()
             }
         if isinstance(chains, str):
@@ -181,7 +181,7 @@ class MultiObjectiveOptimization:
             os.mkdir(self.folder_name + "/input")
         self.folders["input"] = self.folder_name + "/input"
 
-        shutil.copy(self.pdb, self.folders["input"])
+        shutil.copy(self.native_pdb, self.folders["input"])
 
     def check_Iter_finished(self, iteration, sequences_pkl, dataframe_pkl):
         """
@@ -413,8 +413,10 @@ class MultiObjectiveOptimization:
                 self.setup_folders_iter(self.current_iteration)
                 self.logger.debug("Reading the input pdb")
                 # Read the pdb file and get the sequences by chain
-                seq_chains = self._get_seq_from_pdb(pdb_file=self.pdb)
-                # TODO check if chains in seq_chains and self.chains are the same
+                seq_chains = self._get_seq_from_pdb(pdb_file=self.native_pdb)
+                # Save natives sequences
+                self.native_sequence = seq_chains
+                self.optimizer.native = self.native_sequence
                 # For each chain, initialize the population
                 for chain in self.chains:
                     self.logger.info("Initializing the first population")
@@ -424,9 +426,7 @@ class MultiObjectiveOptimization:
                         chain, seq_chains[chain]
                     )
 
-                # Set native sequence and save the info
-                self.native_sequence = seq_chains
-                self.optimizer.native = self.native_sequence
+                # Save the info
                 self.save_info(seq_chains)
 
             else:
@@ -462,10 +462,13 @@ class MultiObjectiveOptimization:
                 metric_df.set_index("Sequence", inplace=True)
                 metric_states = {}
                 for metric in self.metrics:
-                    metric_result = metric.compute(sequences_to_evaluate_str)
+                    metric_result = metric.compute(
+                        sequences=sequences_to_evaluate_str,
+                        iteration=self.current_iteration,
+                        folder_name=self.folder_name,
+                    )
                     metric_df = metric_df.merge(metric_result, on="Sequence")
                     metric_states[metric.name] = metric.state
-                    # TODO redoo the state in ranking, as now metric states is a dict of dicts {metric_name: {submetric_name: state}}
 
                 # Evaluate the population and rank the individuals
                 self.logger.info("Evaluating and ranking the population")
@@ -474,7 +477,6 @@ class MultiObjectiveOptimization:
                     df=metric_df, metric_states=metric_states
                 )
 
-            # TODO save the sequences to the data class, to accumulate the sequences
             # Save the sequences and the data_frame
             self.save_iteration(
                 self.current_iteration, sequences_to_evaluate, evaluated_sequences_df
@@ -493,13 +495,13 @@ if __name__ == "__main__":
     metrics = [Alphabet()]
     debug = True
     max_iterations = 10
-    pdb = "/home/albertcs/GitHub/AlbertCS/multiObjectiveDesign/tests/data/NAGox-glucose-5.pdb"
+    native_pdb = "/home/albertcs/GitHub/AlbertCS/multiObjectiveDesign/tests/data/NAGox-glucose-5.pdb"
     mood = MultiObjectiveOptimization(
         optimizer="genetic_algorithm",
         metrics=metrics,
         debug=debug,
         max_iteration=max_iterations,
-        pdb=pdb,
+        native_pdb=native_pdb,
         data=data,
     )
     mood.run()
