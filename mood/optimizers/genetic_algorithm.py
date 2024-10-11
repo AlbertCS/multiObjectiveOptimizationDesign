@@ -248,7 +248,9 @@ class GeneticAlgorithm(Optimizer):
 
             # Getting the number of missing sequences
             n_missing = self.population_size - len(self.child_sequences)
-            self.logger.debug(f"Initial child sequences: {self.child_sequences}")
+            self.logger.debug(
+                f"Initial child sequences:\n{chr(10).join(self.child_sequences)}"
+            )
             # Calculating the index of the next sequence to generate
             index = len(self.child_sequences)
             if n_missing == 0:
@@ -267,9 +269,6 @@ class GeneticAlgorithm(Optimizer):
                     len(self.child_sequences)
                     < self.population_size * self.mutation_seq_percent
                 ):
-                    self.logger.debug(
-                        f"Adding sequence {len(self.child_sequences)} to the population"
-                    )
                     # Select a sequence to mutate
                     sequence_to_start_from = self.rng.choice(self.child_sequences)
 
@@ -306,14 +305,11 @@ class GeneticAlgorithm(Optimizer):
                         self.child_sequences.append(mutated_sequence)
 
                 self.logger.debug(
-                    f"Child population after mutation: \n  {self.child_sequences}"
+                    f"Child population after mutation:\n{chr(10).join(self.child_sequences)}"
                 )
 
                 # Adding sequences by crossover until the desired population size is reached
                 while len(self.child_sequences) < self.population_size:
-                    self.logger.debug(
-                        f"Adding sequence {len(self.child_sequences)} to the population by Crossover"
-                    )
                     # Get two random sequences to crossover
                     crossover_sequence = self.generate_crossover_sequence(
                         sequences_pool=self.child_sequences, chain=chain
@@ -335,7 +331,7 @@ class GeneticAlgorithm(Optimizer):
                     if added:
                         self.child_sequences.append(crossover_sequence)
                 self.logger.debug(
-                    f"Child population after crossover: \n  {self.child_sequences}"
+                    f"Child population after crossover:\n{chr(10).join(self.child_sequences)}"
                 )
 
             return self.child_sequences
@@ -382,8 +378,6 @@ class GeneticAlgorithm(Optimizer):
             while sequence1 == sequence2:
                 sequence2 = random.choice(sequences_pool)
 
-        self.logger.debug("Generating a crossover sequence")
-
         if crossover_type not in self.crossoverTypes:
             raise ValueError(
                 f"Invalid crossover type {crossover_type}. Allowed types: {self.crossoverTypes}"
@@ -408,7 +402,6 @@ class GeneticAlgorithm(Optimizer):
         chain,
         percent_recomb=0.3,
     ) -> str:
-        self.logger.debug("Performing a uniform crossover")
         recombined_sequence = list(sequence1)
         for i in self.mutable_aa[chain].keys():
             if self.rng.random() < percent_recomb:
