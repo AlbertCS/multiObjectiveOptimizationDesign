@@ -437,12 +437,14 @@ class MultiObjectiveOptimization:
                     parents_sequences[chain] = self.select_parents(
                         evaluated_sequences_df[chain]
                     )
+
+                    # Generate the child population
                     self.logger.info("Generating the child population")
                     sequences_to_evaluate[chain] = (
                         self.optimizer.generate_child_population(
                             parents_sequences[chain],
                             chain=chain,
-                            max_mutations_recomb=1,
+                            current_iteration=self.current_iteration,
                         )
                     )
 
@@ -461,6 +463,7 @@ class MultiObjectiveOptimization:
                 )
                 metric_df.set_index("Sequence", inplace=True)
                 metric_states = {}
+                metric_objectives = []
                 for metric in self.metrics:
                     metric_result = metric.compute(
                         sequences=sequences_to_evaluate_str,
@@ -469,12 +472,15 @@ class MultiObjectiveOptimization:
                     )
                     metric_df = metric_df.merge(metric_result, on="Sequence")
                     metric_states[metric.name] = metric.state
+                    metric_objectives.extend(metric.objectives)
 
                 # Evaluate the population and rank the individuals
                 self.logger.info("Evaluating and ranking the population")
                 # Returns a dataframe with the sequences and the metrics, and a column with the rank
                 evaluated_sequences_df[chain] = self.optimizer.eval_population(
-                    df=metric_df, metric_states=metric_states
+                    df=metric_df,
+                    metric_states=metric_states,
+                    objectives=metric_objectives,
                 )
 
             # Save the sequences and the data_frame

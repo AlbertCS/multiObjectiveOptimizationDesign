@@ -16,6 +16,13 @@ class TestGeneticAlgorithm(unittest.TestCase):
         self.chains = ["A"]
         sequences = {chain: {} for chain in self.chains}
         self.data = AlgorithmDataSingleton(sequences=sequences, chains=self.chains)
+        eval_mutations_params = {
+            "cst_file": "tests/data/Felip9/FeLip9-PET-1_CA.cst",
+            "min_energy_threshold": 1,
+            "seed": 12345,
+            "params_folder": "tests/data/Felip9/PET_params",
+            "native_pdb": "tests/data/Felip9/FeLip9-PET-1.pdb",
+        }
         self.ga = GeneticAlgorithm(
             data=self.data,
             population_size=10,
@@ -54,6 +61,11 @@ class TestGeneticAlgorithm(unittest.TestCase):
             },
             seed=12345,
             debug=True,
+            crossover_iterations=1,
+            mutation_iterations=1,
+            max_mutation_per_iteration=1,
+            eval_mutations=True,
+            eval_mutations_params=eval_mutations_params,
         )
 
     def test_init_population(self):
@@ -78,30 +90,24 @@ class TestGeneticAlgorithm(unittest.TestCase):
                 10: ["N"],
             }
         }
-        mutated_seq1, mut = self.ga.generate_mutation_sequence(sequence, 1.0, chain="A")
-        self.assertEqual(mutated_seq1, "APMCGPCQWR")
+        mutated_seq1, mut = self.ga.generate_mutation_sequence(
+            sequence_to_mutate=sequence, chain="A"
+        )
+        self.assertEqual(mutated_seq1, "ATGCKPLQWR")
         self.assertEqual(
             mut,
             [
-                ("T", 1, "P"),
-                ("G", 2, "M"),
-                ("C", 3, "C"),
-                ("K", 4, "G"),
-                ("L", 6, "C"),
                 ("Q", 7, "Q"),
             ],
         )
-        mutated_seq2, mut = self.ga.generate_mutation_sequence(sequence, 1.0, chain="A")
-        self.assertEqual(mutated_seq2, "APMSAPALWR")
+        mutated_seq2, mut = self.ga.generate_mutation_sequence(
+            sequence_to_mutate=sequence, chain="A"
+        )
+        self.assertEqual(mutated_seq2, "ATGCKPLQWN")
         self.assertEqual(
             mut,
             [
-                ("T", 1, "P"),
-                ("G", 2, "M"),
-                ("C", 3, "S"),
-                ("K", 4, "A"),
-                ("L", 6, "A"),
-                ("Q", 7, "L"),
+                ("R", 10, "N"),
             ],
         )
 
@@ -170,36 +176,13 @@ class TestGeneticAlgorithm(unittest.TestCase):
             )
         self.assertIn("Invalid crossover type", str(context.exception))
 
-    # # Initializing population with zero initial sequences
-    # def test_empty_initial_sequences_list(self):
-    #     sequences_initial = []
-    #     with self.assertRaises(ValueError) as context:
-    #         self.ga.init_population(sequences_initial)
-    #     self.assertIn("No initial sequences provided", str(context.exception))
-    #     self.assertEqual(len(self.sequences), self.ga.population_size)
-
-    # Handling empty mutable positions list
-    # def test_empty_mutable_positions(self):
-    #     ga = GeneticAlgorithm(mutable_aa={"A": {1: ["A", "P", "S"], 2: ["M"]}})
-    #     sequence = "ATGC"
-    #     with self.assertRaises(ValueError) as context:
-    #         _, _ = ga.generate_mutation_sequence(sequence, 1.0, chain="A")
-    #     self.assertIn("No mutable positions provided", str(context.exception))
-
     # Handling empty mutable amino acids dictionary
     def test_empty_mutable_aa_dict(self):
         ga = GeneticAlgorithm(mutable_aa={})
         sequence = "ATGC"
         with self.assertRaises(ValueError) as context:
-            _, _ = ga.generate_mutation_sequence(sequence, 1.0, chain="A")
+            _, _ = ga.generate_mutation_sequence(sequence_to_mutate=sequence, chain="A")
         self.assertIn("No mutable amino acids provided", str(context.exception))
-
-    # Handling mutation rate of zero
-    def test_mutation_rate_zero(self):
-        sequence = "ATGC"
-        mutated_seq, mut = self.ga.generate_mutation_sequence(sequence, 0.0, chain="A")
-        self.assertEqual(mutated_seq, sequence)
-        self.assertEqual(mut, [])
 
     def check_duplicate_sequences(self):
         sequence_counts = {}
@@ -225,7 +208,7 @@ class TestGeneticAlgorithm(unittest.TestCase):
         # with open("seqs.txt", "w") as f:
         #     for seq in seqs:
         #         f.write(str(seq) + "\n")
-        childs = self.ga.generate_child_population(seqs, chain="A")
+        childs = self.ga.generate_child_population(seqs, chain="A", current_iteration=1)
         self.assertEqual(len(childs), self.ga.population_size)
         duplicate_found = self.check_duplicate_sequences()
         self.assertFalse(
@@ -233,41 +216,20 @@ class TestGeneticAlgorithm(unittest.TestCase):
             "No sequence appears more than once in self.ga.data.sequences",
         )
 
-    # def test_eval_population(self):
-    #     import pandas as pd
-
-    #     data_frame = pd.DataFrame(
-    #         {
-    #             "Sequence": [
-    #                 "ATG",
-    #                 "TGA",
-    #                 "GAT",
-    #                 "PIU",
-    #             ],
-    #             "Metric1": [2, 1, 3, 3],
-    #             "Metric2": [-3, -1, -3, -1],
-    #         }
-    #     )
-    #     """
-    #     "Metric1": [2, 6, 1, 1],
-    #     "Metric2": [1, 6, 1, 3],
-
-    #     "Metric1": [-2, -6, -1, -1],
-    #     "Metric2": [-1, -6, -1, -3],
-
-    #     "Metric1": [2, 1, 3, 3],
-    #     "Metric2": [-3, -1, -3, -1],
-    #     """
-
-    #     states = {"Metric1": "Positive", "Metric2": "Negative"}
-
-    #     ranked_df = self.ga.calculate_non_dominated_rank(data_frame, states)
-
-    #     # Assert that the Rank column has the expected values
-    #     expected_ranks = [2.0, 1.0, 2.0, 2.0]
-    #     assert (
-    #         ranked_df["Rank"].tolist() == expected_ranks
-    #     ), f"Expected ranks {expected_ranks}, but got {ranked_df['Rank'].tolist()}"
+    def test_evaluate_mutation(self):
+        sequence = "EHNPVVMVHGMGGASYNFASIKSYLVTQGWDRNQLFAIDFIDKTGNNRNNGPRLSRMVKDVLGKTGAKKVDIVAHSMGGANTLYYIKNLGGGDKIENVVTLGGANGLVSLRALPGTDPNQKGSYTSVYSSADMIVVNSLSRLIGARNVLIHGVGHISLLASSQVKGYIKEGLNGGGQNTN"
+        mutated_seq = "PHNPVVMVHGMGGASYNFASIKSYLVTQGWDRNQLFAIDFIDKTGNNRNNGPRLSRMVKDVLGKTGAKKVDIVAHSMGGANTLYYIKNLGGGDKIENVVTLGGANGLVSLRALPGTDPNQKGSYTSVYSSADMIVVNSLSRLIGARNVLIHGVGHISLLASSQVKGYIKEGLNGGGQNTN"
+        # rs = mut[0][1]
+        # Rosetta starts at index 1
+        dEnergy = self.ga.local_relax(
+            residues=[1],
+            moving_chain="A",
+            starting_sequence=sequence,
+            mutated_sequence=mutated_seq,
+            cst_file=self.ga.eval_mutations_params["cst_file"],
+        )
+        if dEnergy < self.ga.eval_mutations_params["min_energy_threshold"]:
+            print("Mutation with worst energy")
 
 
 # Usage example

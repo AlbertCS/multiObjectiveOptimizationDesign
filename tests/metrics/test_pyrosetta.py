@@ -3,6 +3,8 @@ import json
 import os
 import pickle
 import shutil
+import sys
+import trace
 
 import numpy as np
 import pandas as pd
@@ -182,7 +184,7 @@ class Mpi_relax:
 
     def mutate_native_pose(self, pose, seq):
         for res, aa in zip(pose.residues, seq):
-            if res.name1() == "Z" or "X":
+            if res.name1() == "Z":
                 continue
             elif str(res.name1()) != str(aa):
                 toolbox.mutate_residue(pose, res.seqpos(), aa)
@@ -248,6 +250,7 @@ class Mpi_relax:
         comm = MPI.COMM_WORLD
         rank = comm.Get_rank()
         size = comm.Get_size()
+        sys.stdout = open("trace_{:04d}.txt".format(comm.rank), "w")
         # size = 4
 
         # List of sequences to be relaxed
@@ -400,17 +403,17 @@ class Mpi_relax:
                 return pd.DataFrame(flattened_data, columns=column_names)
 
             df_relaxed_energies = flatten_and_merge(
-                all_relaxed_energies, ["Index", "Relax_Energy"]
+                all_relaxed_energies, ["Index", "Relax Energy"]
             )
             df_interface_scores = flatten_and_merge(
-                all_interface_scores, ["Index", "Interface_Score"]
+                all_interface_scores, ["Index", "Interface Score"]
             )
-            df_apo_scores = flatten_and_merge(all_apo_scores, ["Index", "Apo_Score"])
+            df_apo_scores = flatten_and_merge(all_apo_scores, ["Index", "Apo Score"])
             df_hydrophobic_scores = flatten_and_merge(
-                all_hydrophobic_scores, ["Index", "Hydrophobic_Score"]
+                all_hydrophobic_scores, ["Index", "Hydrophobic Score"]
             )
             df_salt_bridges = flatten_and_merge(
-                all_salt_bridges, ["Index", "Salt_Bridges"]
+                all_salt_bridges, ["Index", "Salt Bridges"]
             )
             flattened_dist = [item for sublist in all_distances_res for item in sublist]
             df_distances = pd.DataFrame(
@@ -430,68 +433,33 @@ class Mpi_relax:
             df.to_csv(f"{output_folder}/rosetta_scores.csv", index=False)
 
 
-import argparse
-
-
-def parse_arguments():
-    parser = argparse.ArgumentParser(description="MPI Relaxation Script")
-    parser.add_argument(
-        "--output_folder",
-        type=str,
-        default="output_relax",
-        help="Output directory for the job",
-    )
-    parser.add_argument(
-        "--native_pdb", type=str, required=True, help="Path to the native PDB file"
-    )
-    parser.add_argument(
-        "--params_folder", type=str, required=True, help="Path to the parameters folder"
-    )
-    parser.add_argument(
-        "--seed", type=int, default=12345, help="Random seed for the job"
-    )
-    parser.add_argument(
-        "--sequences_file",
-        type=str,
-        default="sequences.txt",
-        help="Input file containing sequences",
-    )
-    parser.add_argument(
-        "--distances",
-        type=str,
-        default="distance.pkl",
-        required=True,
-        help="File containing distances between residues",
-    )
-    parser.add_argument(
-        "--cst_file",
-        type=str,
-        default=None,
-        help="File containing constraints for the job",
-    )
-
-    return parser.parse_args()
-
 
 if __name__ == "__main__":
-    args = parse_arguments()
 
-    if args.params_folder != None:
+    params_folder = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/Felip9/PET_params"
+    seed = 1235
+    output_folder = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/metrics/testt"
+    native_pdb = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/Felip9/FeLip9-PET-1.pdb"
+    distances = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/distances.json"
+    sequences_file = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/mood_job/003/relax/sequences.txt"
+    cst_file = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/Felip9/FeLip9-PET-1_CA.cst"
+
+    if params_folder != None:
         patches = [
-            args.params_folder + "/" + x
-            for x in os.listdir(args.params_folder)
+            params_folder + "/" + x
+            for x in os.listdir(params_folder)
             if x.endswith(".txt")
         ]
         params = [
-            args.params_folder + "/" + x
-            for x in os.listdir(args.params_folder)
+            params_folder + "/" + x
+            for x in os.listdir(params_folder)
             if x.endswith(".params")
         ]
         if patches == []:
             patches = None
         if params == []:
             raise ValueError(
-                f"Params files were not found in the given folder: {args.params_folder}!"
+                f"Params files were not found in the given folder: {params_folder}!"
             )
 
     # Prom a list of path files, create a string with all the paths separated by a space
@@ -501,33 +469,54 @@ if __name__ == "__main__":
     print(f"Params:\n{params}")
     print(f"Patches:\n{patches}")
 
-    options = f"-relax:default_repeats 1 -constant_seed true -jran {args.seed}"
+    options = f"-relax:default_repeats 1 -constant_seed true -jran {seed}"
     options += f" -extra_res_fa {params} -extra_patch_fa {patches}"
 
     prs.pyrosetta.init(options=options)
 
     mpi_relax = Mpi_relax()
 
-    if not os.path.exists(args.output_folder):
-        os.makedirs(args.output_folder)
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
 
-    if not os.path.exists(args.native_pdb):
-        raise ValueError(f"The native pdb file {args.native_pdb} does not exist")
+    if not os.path.exists(native_pdb):
+        raise ValueError(f"The native pdb file {native_pdb} does not exist")
 
-    if args.distances.endswith(".pkl"):
-        with open(args.distances, "rb") as file:
+    if distances.endswith(".pkl"):
+        with open(distances, "rb") as file:
             distances = pickle.load(file)
-    elif args.distances.endswith(".json"):
-        with open(args.distances, "r") as file:
+    elif distances.endswith(".json"):
+        with open(distances, "r") as file:
             distances = json.load(file)
 
-    if not os.path.exists(args.sequences_file):
-        raise ValueError(f"The sequence file {args.sequences_file} does not exists")
+    if not os.path.exists(sequences_file):
+        raise ValueError(f"The sequence file {sequences_file} does not exists")
 
-    mpi_relax.main(
-        output_folder=args.output_folder,
-        sequences_file=args.sequences_file,
-        native_pdb=args.native_pdb,
-        distance_dict=distances,
-        cst_file=args.cst_file,
+    tracer = trace.Trace(
+        ignoredirs=[sys.prefix, sys.exec_prefix],
+        ignoremods=[
+            "inspect",
+            "contextlib",
+            "_bootstrap",
+            "_weakrefset",
+            "abc",
+            "posixpath",
+            "genericpath",
+            "textwrap",
+        ],
+        trace=1,
+        count=0,
+    )
+
+    # by default trace goes to stdout
+    # redirect to a different file for each processes
+
+    tracer.runfunc(
+        mpi_relax.main(
+            output_folder=output_folder,
+            sequences_file=sequences_file,
+            native_pdb=native_pdb,
+            distance_dict=distances,
+            cst_file=cst_file,
+        )
     )

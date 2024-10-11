@@ -23,6 +23,9 @@ class GeneticAlgorithm(Optimizer):
         mutable_aa: Dict[int, Any] = {},
         eval_mutations: bool = False,  # Rosetta minimization mover to decide if the mutations are accepted
         eval_mutations_params: Dict[str, Any] = {},
+        crossover_iterations=1,
+        mutation_iterations=1,
+        max_mutation_per_iteration=1,
     ) -> None:
         super().__init__(
             population_size=population_size,
@@ -42,12 +45,17 @@ class GeneticAlgorithm(Optimizer):
         self.child_sequences = []
         self.crossoverTypes = ["uniform", "two_point", "single_point"]
         self.native = None
+        self.crossover_iterations = crossover_iterations
+        self.mutation_iterations = mutation_iterations
+        self.cycle_length = self.crossover_iterations + self.mutation_iterations
+        self.max_mutation_per_iteration = max_mutation_per_iteration
 
+        self.eval_mutations = eval_mutations
         if eval_mutations:
             self.eval_mutations_params = eval_mutations_params
             self.native_pdb = eval_mutations_params["native_pdb"]
             eval_mutations_params["cst_file"]
-            
+
             import pyrosetta as prs
 
             if eval_mutations_params["params_folder"] != None:
@@ -74,23 +82,61 @@ class GeneticAlgorithm(Optimizer):
             options += f" -extra_res_fa {params} -extra_patch_fa {patches}"
 
             prs.pyrosetta.init(options=options)
-            
+
     def local_relax(
         self,
         residues=None,
         moving_chain=None,
         neighbour_distance=10,
-        minimization_steps=100,
-        min_energy_threshold=2,
+        minimization_steps=10,
+        starting_sequence=None,
+        mutated_sequence=None,
+        cst_file=None,
     ):
         import pyrosetta as prs
-        residues = residues or []
-        
-        native_pose = prs.pyrosetta.pose_from_pdb(self.native_pdb)
-        min_pose = native_pose.clone()
+        from pyrosetta import toolbox
 
-        sfxn = prs.rosetta.core.scoring.ScoreFunctionFactory.create_score_function("ref2015")
-        
+        def mutate_native_pose(pose, seq):
+            for res, aa in zip(pose.residues, seq):
+                if res.name1() == "Z" and res.name1() == "X":
+                    continue
+                elif str(res.name1()) != str(aa):
+                    toolbox.mutate_residue(pose, res.seqpos(), aa)
+            return pose
+
+        residues = residues or []
+        native_pose = prs.pyrosetta.pose_from_pdb(self.native_pdb)
+
+        sfxn = prs.rosetta.core.scoring.ScoreFunctionFactory.create_score_function(
+            "ref2015"
+        )
+        sfxn_scorer = (
+            prs.rosetta.core.scoring.ScoreFunctionFactory.create_score_function(
+                "ref2015"
+            )
+        )
+        atom_pair_constraint_weight = 1
+
+        if cst_file is not None:
+            sfxn.set_weight(prs.rosetta.core.scoring.ScoreType.res_type_constraint, 1)
+            # Define catalytic constraints
+            set_constraints = (
+                prs.rosetta.protocols.constraint_movers.ConstraintSetMover()
+            )
+            # Add constraint file
+            set_constraints.constraint_file(cst_file)
+            # Add atom_pair_constraint_weight ScoreType
+            sfxn.set_weight(
+                prs.rosetta.core.scoring.ScoreType.atom_pair_constraint,
+                atom_pair_constraint_weight,
+            )
+            # Turn on constraint with the mover
+            set_constraints.add_constraints(True)
+            set_constraints.apply(native_pose)
+
+        starting_pose = mutate_native_pose(native_pose, starting_sequence)
+        mutated_pose = mutate_native_pose(native_pose, mutated_sequence)
+
         fastrelax_mover = prs.rosetta.protocols.relax.FastRelax()
         fastrelax_mover.set_scorefxn(sfxn)
 
@@ -104,7 +150,9 @@ class GeneticAlgorithm(Optimizer):
             chain_indexes = []
 
         # indexes seria mutations
-        ct_chain_selector = prs.rosetta.core.select.residue_selector.ResidueIndexSelector()
+        ct_chain_selector = (
+            prs.rosetta.core.select.residue_selector.ResidueIndexSelector()
+        )
         indexes = chain_indexes + residues
         ct_chain_selector.set_index(",".join([str(x) for x in indexes]))
 
@@ -130,7 +178,9 @@ class GeneticAlgorithm(Optimizer):
         mmf_relax.add_chi_action(enable_mm, nbr_selector)
 
         # Define RLT to prevent repacking of residues (fix side chains)
-        prevent_repacking_rlt = prs.rosetta.core.pack.task.operation.PreventRepackingRLT()
+        prevent_repacking_rlt = (
+            prs.rosetta.core.pack.task.operation.PreventRepackingRLT()
+        )
         # Define RLT to only repack residues (movable side chains but fixed sequence)
         restrict_repacking_rlt = (
             prs.rosetta.core.pack.task.operation.RestrictToRepackingRLT()
@@ -156,20 +206,16 @@ class GeneticAlgorithm(Optimizer):
         fastrelax_mover.set_movemap_factory(mmf_relax)
         fastrelax_mover.set_task_factory(tf_sampling)
 
-        initial_energy = sfxn(min_pose)
         for step in range(1, minimization_steps + 1):
-            fastrelax_mover.apply(min_pose)
-            final_energy = sfxn(min_pose)
-            d_energy = final_energy - initial_energy
-            if abs(d_energy) < abs(min_energy_threshold):
-                break
-            initial_energy = final_energy
+            fastrelax_mover.apply(starting_pose)
+            final_energy_starting_pose = sfxn_scorer(starting_pose)
+            final_energy_mutated_pose = sfxn_scorer(mutated_pose)
 
         if step == minimization_steps - 1:
             print(f"Maximum number of relax iterations ({minimization_steps}) reached.")
             print("Energy convergence failed!")
 
-        return min_pose
+        return final_energy_starting_pose - final_energy_mutated_pose
 
     def init_population(self, chain, sequences_initial, max_attempts=1000):
         self.logger.info("Initializing the population")
@@ -217,15 +263,33 @@ class GeneticAlgorithm(Optimizer):
                         f"Populating {self.mutation_seq_percent * 100}% of the {self.population_size} total population"
                     )
                 # Adding sequences by mutation until the desired percentage is reached
-                while len(self.child_sequences) < self.population_size * self.mutation_seq_percent:
-                    self.logger.debug(f"Adding sequence {len(self.child_sequences)} to the population")
+                while (
+                    len(self.child_sequences)
+                    < self.population_size * self.mutation_seq_percent
+                ):
+                    self.logger.debug(
+                        f"Adding sequence {len(self.child_sequences)} to the population"
+                    )
                     # Select a sequence to mutate
                     sequence_to_start_from = self.rng.choice(self.child_sequences)
 
                     mutated_sequence, mut = self.generate_mutation_sequence(
-                        sequence_to_start_from, self.init_mutation_rate, chain
+                        chain=chain,
+                        sequence_to_mutate=sequence_to_start_from,
+                        max_mutations_recomb=self.max_mutation_per_iteration,
                     )
-                    # TODO: Add mover for calculating the energy of the new sequence
+                    # TODO may need to adapt to a more than one mutation per iteration
+                    # Evaluate the mutation with rosetta
+                    if self.eval_mutations:
+                        dEnergy = self.local_relax(
+                            residues=mut[0][1],
+                            moving_chain=chain,
+                            starting_sequence=sequence_to_start_from,
+                            mutated_sequence=mutated_sequence,
+                            cst_file=self.eval_mutations_params["cst_file"],
+                        )
+                        if dEnergy < self.eval_mutations_params["min_energy_threshold"]:
+                            continue
                     # Add the new sequence to the data object and iter_sequences
                     added = self.data.add_sequence(
                         chain=chain,
@@ -263,27 +327,24 @@ class GeneticAlgorithm(Optimizer):
                             chain=chain,
                             index=self.data.nsequences(chain) + 1,
                             active=True,
-                            mutations=None,  # Corrección: no hay mutaciones específicas
+                            mutations=None,
                             native=self.native,
                         ),
                     )
 
-                    if added: 
+                    if added:
                         self.child_sequences.append(crossover_sequence)
                 self.logger.debug(
                     f"Child population after crossover: \n  {self.child_sequences}"
-                )   
+                )
 
             return self.child_sequences
         except Exception as e:
             self.logger.error(f"Error initializing the population: {e}")
             raise ValueError(f"Error initializing the population: {e}")
 
-    def generate_mutation_sequence(self, sequence_to_mutate, mutation_rate, chain):
+    def generate_mutation_sequence_old(self, sequence_to_mutate, mutation_rate, chain):
         self.logger.debug("Generating a mutant sequence")
-        # if not self.mutable_positions:
-        #     self.logger.error("No mutable positions provided")
-        #     raise ValueError("No mutable positions provided")
         if not self.mutable_aa:
             self.logger.error("No mutable amino acids provided")
             raise ValueError("No mutable amino acids provided")
@@ -304,17 +365,6 @@ class GeneticAlgorithm(Optimizer):
                 mut.append((aa, i, new_aa[i]))
         self.logger.debug(f"Mutated_sequence: {''.join(mutable_seq)}")
         return "".join(mutable_seq), mut
-
-    def mutate_sequence_recombination(
-        self, chain, recombined_sequence, max_mutations_recomb=1
-    ):
-        recombined_sequence_l = list(recombined_sequence)
-        for _ in range(self.rng.choice(list(range(max_mutations_recomb + 1)))):
-            position = self.rng.choice(list(self.mutable_aa[chain].keys()))
-            new_aa = self.rng.choice(self.mutable_aa[chain][position])
-            # TODO check if its necesary the -1 with the offset correction
-            recombined_sequence_l[position - 1] = new_aa
-        return "".join(recombined_sequence_l)
 
     def generate_crossover_sequence(
         self,
@@ -339,23 +389,30 @@ class GeneticAlgorithm(Optimizer):
                 f"Invalid crossover type {crossover_type}. Allowed types: {self.crossoverTypes}"
             )
         if crossover_type == "two_point":
-            return self.two_point_crossover(sequence1=sequence1, sequence2=sequence2, chain=chain)
+            return self.two_point_crossover(
+                sequence1=sequence1, sequence2=sequence2, chain=chain
+            )
         elif crossover_type == "single_point":
-            return self.single_point_crossover(sequence1=sequence1, sequence2=sequence2, chain=chain)
+            return self.single_point_crossover(
+                sequence1=sequence1, sequence2=sequence2, chain=chain
+            )
         else:
-            return self.uniform_crossover(sequence1=sequence1, sequence2=sequence2, chain=chain)
+            return self.uniform_crossover(
+                sequence1=sequence1, sequence2=sequence2, chain=chain
+            )
 
     def uniform_crossover(
-        self, sequence1, sequence2, chain, percent_recomb=0.3,
+        self,
+        sequence1,
+        sequence2,
+        chain,
+        percent_recomb=0.3,
     ) -> str:
         self.logger.debug("Performing a uniform crossover")
         recombined_sequence = list(sequence1)
         for i in self.mutable_aa[chain].keys():
             if self.rng.random() < percent_recomb:
                 recombined_sequence[i - 1] = sequence2[i - 1]
-            # self.logger.debug(f"Initial_sequences: 1.{sequence1}")
-            # self.logger.debug(f"Initial_sequences: 2.{sequence2}")
-            # self.logger.debug(f"  Recombined_sequence: {recombined_sequence}")
 
         return "".join(recombined_sequence)
 
@@ -371,9 +428,6 @@ class GeneticAlgorithm(Optimizer):
         for i in range(start, end + 1):
             if i in self.mutable_aa[chain].keys():
                 recombined_sequence[i - 1] = sequence2[i - 1]
-        # self.logger.debug(f"Initial_sequences: 1.{sequence1}")
-        # self.logger.debug(f"Initial_sequences: 2.{sequence2}")
-        # self.logger.debug(f"  Recombined_sequence: {recombined_sequence}")
         return "".join(recombined_sequence)
 
     def single_point_crossover(
@@ -386,33 +440,19 @@ class GeneticAlgorithm(Optimizer):
         for i in range(crossover_point, len(sequence1) + 1):
             if i in self.mutable_aa[chain].keys():
                 recombined_sequence[i - 1] = sequence2[i - 1]
-        # self.logger.debug(f"Initial_sequences: 1.{sequence1}")
-        # self.logger.debug(f"Initial_sequences: 2.{sequence2}")
-        # self.logger.debug(f"  Recombined_sequence: {recombined_sequence}")
         return "".join(recombined_sequence)
 
-    def calculate_pareto_front(self, df, selected_columns, dimension=1):
-        """Calculate the Pareto front from a DataFrame for maximization problems."""
-        values = df[selected_columns].values
-        pareto_front_mask = np.ones(values.shape[0], dtype=bool)
-        for i in range(values.shape[0]):
-            if pareto_front_mask[
-                i
-            ]:  # the dominated will be turned to False so no need to check
-                # dominated_mask = np.sum((values >= values[i]), axis=1) >= dimension
-                dominated_mask = np.sum((values <= values[i]), axis=1) >= dimension
-
-                pareto_front_mask &= dominated_mask
-
-        return df[pareto_front_mask]
-
-    def calculate_non_dominated_rank(self, df, metric_states=None):
+    def calculate_non_dominated_rank(self, df, metric_states=None, objectives=None):
         """
         Calculate the non-dominated rank for each individual in the population.
         """
         df_to_empty = df.copy()
 
         df_to_empty = df_to_empty.drop(columns=["Sequence"])
+
+        # for the df_to_empty, only keep the columns in the objectives list
+        df_to_empty = df_to_empty[objectives]
+
         population_size = df_to_empty.shape[0]
 
         # Changes the values by state
@@ -441,34 +481,7 @@ class GeneticAlgorithm(Optimizer):
 
         return df
 
-    def rank_by_pareto(self, df, dimension):
-        """
-        Functions that calculates the pareto front and assigns a rank to each individual in the population.
-        Returns the DataFrame with a new column rank with the rank of each individual.
-        """
-        df_to_empty = df.copy()
-        df_final = df.copy()
-        df_to_empty = df_to_empty.drop(columns=["Sequence"])
-        rank = 1
-        while not df_to_empty.empty:
-            pareto_front = self.calculate_pareto_front(
-                df_to_empty, df_to_empty.columns, dimension
-            )
-
-            # Assign rank to the Pareto front rows
-            df_final.loc[pareto_front.index, "Rank"] = int(rank)
-
-            # Remove the Pareto front rows from df_to_empty
-            df_to_empty = df_to_empty.drop(pareto_front.index)
-
-            rank += 1
-
-        return df_final
-
-    def rank_by_pareto_old(self, df, dimension):
-        pass
-
-    def eval_population(self, df, dimension=1, metric_states=None):
+    def eval_population(self, df, metric_states=None, objectives=None):
         """
         Evaluates the population to identify the parent population for the next generation.
         Returns the DataFrame with a the rank in a new column.
@@ -476,60 +489,93 @@ class GeneticAlgorithm(Optimizer):
         self.logger.info("Evaluating the population")
         # Calculate the Pareto front
         # ranked_df = self.rank_by_pareto(df, dimension)
-        ranked_df = self.calculate_non_dominated_rank(df, metric_states)
+        # TODO filter the df to only contain objective metrics
+        ranked_df = self.calculate_non_dominated_rank(
+            df=df, metric_states=metric_states, objectives=objectives
+        )
 
         return ranked_df
 
     # TODO implement the following sort: https://github.com/smkalami/nsga2-in-python/blob/main/nsga2.py
 
+    def generate_mutation_sequence(
+        self, chain, sequence_to_mutate, max_mutations_recomb=1
+    ):
+        sequence_to_mutate_list = list(sequence_to_mutate)
+        mut = []
+        if self.mutable_aa == {}:
+            raise ValueError("No mutable amino acids provided")
+        for _ in range(self.rng.choice(list(range(max_mutations_recomb + 1)))):
+            position = self.rng.choice(list(self.mutable_aa[chain].keys()))
+            new_aa = self.rng.choice(self.mutable_aa[chain][position])
+            sequence_to_mutate_list[position] = new_aa
+            mut.append((sequence_to_mutate[position], position, new_aa))
+
+        return "".join(sequence_to_mutate_list), mut
+
     def generate_child_population(
         self,
         parent_sequences,
         chain=None,
-        max_mutations_recomb=1,
+        current_iteration=None,
     ):
-        self.logger.info("Generating the child population")
-        # Initialize the child population list
         self.child_sequences = []
-        if len(parent_sequences) < 2:
-            self.logger.error(
-                "Not enough parent sequences to generate a child population"
-            )
-            raise ValueError(
-                "Not enough parent sequences to generate a child population"
-            )
-        # Adding sequences by crossover til the desired population size is reached
-        while len(self.child_sequences) < self.population_size:
-            self.logger.debug(
-                f"Adding sequence {len(self.child_sequences)} to the population by CrossOver"
-            )
-            # Crossover
-            crossover_sequence = self.generate_crossover_sequence(
-                sequences_pool=parent_sequences, chain=chain
-            )
-            crossover_sequence_m = self.mutate_sequence_recombination(
-                chain=chain,
-                recombined_sequence=crossover_sequence,
-                max_mutations_recomb=max_mutations_recomb,
-            )
-            
-            # Add the new sequence to the data object
-            added = self.data.add_sequence(
-                chain=chain,
-                new_sequence=Sequence(
-                    sequence=crossover_sequence_m,
+        cycle_pos = current_iteration % self.cycle_length
+
+        if cycle_pos < self.crossover_iterations:
+            self.logger.debug(f"Iteration {current_iteration} - Crossover")
+            while len(self.child_sequences) < self.population_size:
+                child_sequence = self.generate_crossover_sequence(
+                    sequences_pool=parent_sequences, chain=chain
+                )
+                added = self.data.add_sequence(
                     chain=chain,
-                    index=self.data.nsequences(chain) + 1,
-                    active=True,
-                    mutations=None,
-                    native=self.native,
-                ),
-            )
-            if added:
-                self.child_sequences.append(crossover_sequence)
-            
-            self.logger.debug(
-                f"Generated child population: \n  {self.child_sequences}"
-            )
+                    new_sequence=Sequence(
+                        sequence=child_sequence,
+                        chain=chain,
+                        index=self.data.nsequences(chain) + 1,
+                        active=True,
+                        mutations=None,
+                        native=self.native,
+                    ),
+                )
+                if added:
+                    self.child_sequences.append(child_sequence)
+                # TODO may need in a future, if we can not generate more sequences via crossover generate them via mutation
+        else:
+            self.logger.debug(f"Iteration {current_iteration} - Mutation")
+            while len(self.child_sequences) < self.population_size:
+                sequence_to_start_from = self.rng.choice(parent_sequences)
+                child_sequence, mut = self.generate_mutation_sequence(
+                    chain=chain,
+                    sequence_to_mutate=sequence_to_start_from,
+                    max_mutations_recomb=self.max_mutation_per_iteration,
+                )
+                # TODO may need to adapt to a more than one mutation per iteration
+                # Evaluate the mutation with rosetta
+                if self.eval_mutations:
+                    pass
+                    dEnergy = self.local_relax(
+                        residues=mut[0][1],
+                        moving_chain=chain,
+                        starting_sequence=sequence_to_start_from,
+                        mutated_sequence=child_sequence,
+                        cst_file=self.eval_mutations_params["cst_file"],
+                    )
+                    if dEnergy < self.eval_mutations_params["min_energy_threshold"]:
+                        continue
+                added = self.data.add_sequence(
+                    chain=chain,
+                    new_sequence=Sequence(
+                        sequence=child_sequence,
+                        chain=chain,
+                        index=self.data.nsequences(chain) + 1,
+                        active=True,
+                        mutations=mut,
+                        native=self.native,
+                    ),
+                )
+                if added:
+                    self.child_sequences.append(child_sequence)
 
         return self.child_sequences

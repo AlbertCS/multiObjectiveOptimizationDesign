@@ -12,13 +12,14 @@ class RosettaMetrics(Metric):
     def __init__(self, params_folder, cpus, seed, native_pdb, distances_file, cst_file):
         super().__init__()
         self.state = {
-            "RelaxEnergy": "negative",
-            "InterfaceScore": "negative",
-            "Apo Score": "negative",
-            "HydrophobicScore": "negative",
-            "SaltBridges": "positive",
+            "Relax_Energy": "negative",
+            "Interface_Score": "negative",
+            "Apo_Score": "negative",
+            "Hydrophobic_Score": "negative",
+            "Salt_Bridges": "positive",
             "distances": "negative",
         }
+        self._objectives = ["Relax_Energy", "Interface_Score"]
         self.name = "rosettaMetrics"
         self.params_folder = params_folder
         self.cpus = cpus
@@ -26,6 +27,10 @@ class RosettaMetrics(Metric):
         self.native_pdb = native_pdb
         self.distances_file = distances_file
         self.cst_file = cst_file
+
+    @property
+    def objectives(self):
+        return self._objectives
 
     def _copyScriptFile(
         self, output_folder, script_name, no_py=False, subfolder=None, hidden=True
@@ -38,27 +43,30 @@ class RosettaMetrics(Metric):
 
         """
         # Get script
-        path = "mood/metrics/scripts"
-        if subfolder != None:
-            path = path + "/" + subfolder
+        base_path = "mood/metrics/scripts"
+        if subfolder is not None:
+            base_path = os.path.join(base_path, subfolder)
 
-        script_file = resource_stream(
-            Requirement.parse("MultiObjectiveOptimization"), path + "/" + script_name
-        )
-        script_file = io.TextIOWrapper(script_file)
+        script_path = os.path.join(base_path, script_name)
+        with resource_stream(
+            Requirement.parse("MultiObjectiveOptimization"), script_path
+        ) as script_file:
+            script_file = io.TextIOWrapper(script_file)
 
-        # Write control script to output folder
-        if no_py == True:
-            script_name = script_name.replace(".py", "")
+            # Adjust script name if no_py is True
+            if no_py:
+                script_name = script_name.replace(".py", "")
 
-        if hidden:
-            output_path = output_folder + "/." + script_name
-        else:
-            output_path = output_folder + "/" + script_name
+            # Build the output path
+            if hidden:
+                output_path = os.path.join(output_folder, f".{script_name}")
+            else:
+                output_path = os.path.join(output_folder, script_name)
 
-        with open(output_path, "w") as sof:
-            for l in script_file:
-                sof.write(l)
+            # Write the script to the output folder
+            with open(output_path, "w") as sof:
+                for line in script_file:
+                    sof.write(line)
 
     def compute(self, sequences, iteration, folder_name):
 

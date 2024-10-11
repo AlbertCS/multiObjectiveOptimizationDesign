@@ -28,3 +28,11 @@ class Metric:
     @name.setter
     def name(self, value):
         self._name = value
+
+    @property
+    def objectives(self):
+        return self._objectives
+
+    @objectives.setter
+    def objectives(self, value):
+        self._objectives = value
