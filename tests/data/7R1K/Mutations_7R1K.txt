@@ -1,0 +1,15 @@
+Functional Mutations:
+    A155Val -> Leu, Cys, Phe, Met, Ser, Ala, His, Ile, Thr
+    A156Gly -> His, Ser, Thr, Cys, Asp, Val
+
+Structural Mutations: (*less than 70% to preserve the activity)
+    A184Glu -> Lys, Gln, *Ala, *Arg
+    A70Lys -> Gln, Asp, Ser, Hiss, Thr, Met, Ala, Phe, Arg, Asn, Val, Cys, Glu
+    A34Arg -> His, Asp, Gln, Ser, Lys, Met, Phe, Leu, Thr, Ala, Cys
+    A121Asn -> Asp, Ser, His, Thr, Cys, Va, Tyr, Lys, Gln, Phe
+    A36Gln -> Arg, Glu, Asp, Lys, Ala, Met, Ser, His, Leu
+    A120Pro -> Ser, Asp, His, Gln, Thr, Cys, Gly, Ala, Arg, Lys
+    A66Lys -> Gln, Arg, Glu, Ala, Met, Leu, Ser, Phe, His
+    A122Gln -> Ser, His, Asp, Lys, Met, Arg, Thr, Ala
+    A113Arg -> Glu, Asp, His, Gln, Ser, Ala, Cys, Lys, Asn, Thr, Val, Met
+    A55Arg -> Ala, Gln, Glu, Met, Leu, Val, Cys, Asp, Lys, Ser, Phe
