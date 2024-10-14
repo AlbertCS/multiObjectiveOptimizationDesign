@@ -182,7 +182,7 @@ class Mpi_relax:
 
     def mutate_native_pose(self, pose, seq):
         for res, aa in zip(pose.residues, seq):
-            if res.name1() == "Z" or "X":
+            if str(res.name1()) == "Z" or str(res.name1()) == "X":
                 continue
             elif str(res.name1()) != str(aa):
                 toolbox.mutate_residue(pose, res.seqpos(), aa)
