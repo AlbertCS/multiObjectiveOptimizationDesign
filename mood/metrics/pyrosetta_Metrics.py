@@ -3,7 +3,7 @@ import os
 import subprocess
 
 import pandas as pd
-from pkg_resources import Requirement, resource_listdir, resource_stream
+from pkg_resources import Requirement, resource_stream
 
 from mood.metrics import Metric
 
