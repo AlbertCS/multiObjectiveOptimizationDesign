@@ -516,7 +516,7 @@ class GeneticAlgorithm(Optimizer):
         cycle_pos = current_iteration % self.cycle_length
 
         if cycle_pos < self.crossover_iterations:
-            self.logger.debug(f"Iteration {current_iteration} - Crossover")
+            self.logger.info(f"Iteration {current_iteration} - Crossover")
             while len(self.child_sequences) < self.population_size:
                 child_sequence = self.generate_crossover_sequence(
                     sequences_pool=parent_sequences, chain=chain
@@ -536,7 +536,7 @@ class GeneticAlgorithm(Optimizer):
                     self.child_sequences.append(child_sequence)
                 # TODO may need in a future, if we can not generate more sequences via crossover generate them via mutation
         else:
-            self.logger.debug(f"Iteration {current_iteration} - Mutation")
+            self.logger.info(f"Iteration {current_iteration} - Mutation")
             while len(self.child_sequences) < self.population_size:
                 sequence_to_start_from = self.rng.choice(parent_sequences)
                 child_sequence, mut = self.generate_mutation_sequence(

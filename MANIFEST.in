@@ -1,0 +1,2 @@
+recursive-include mood/metrics/ProteinMPNN *
+recursive-include mood/metrics/scripts *

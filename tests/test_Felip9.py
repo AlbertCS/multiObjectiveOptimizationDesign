@@ -7,7 +7,8 @@ from Bio.Seq import Seq
 from icecream import ic
 
 from mood.base.data import AlgorithmDataSingleton
-from mood.metrics.pyrosettaMetrics import RosettaMetrics
+from mood.metrics.proteinMPNN_Metrics import ProteinMPNNMetrics
+from mood.metrics.pyrosetta_Metrics import RosettaMetrics
 from mood.multiObjectiveOptimization import MultiObjectiveOptimization
 
 
@@ -28,7 +29,8 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
                 native_pdb=native_pdb,
                 distances_file=distances_file,
                 cst_file=cst_file,
-            )
+            ),
+            ProteinMPNNMetrics(chain="A", seed=1235, native_pdb=native_pdb),
         ]
         debug = True
         max_iteration = 5

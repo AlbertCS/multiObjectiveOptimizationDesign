@@ -7,6 +7,7 @@ setup(
     author_email="acanella@bsc.es",
     description="MultiObjective Optimization for protein design",
     packages=find_packages(),
+    include_package_data=True,
     install_requires=[
         # List any dependencies your package requires
     ],
