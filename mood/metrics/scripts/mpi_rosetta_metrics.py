@@ -356,7 +356,7 @@ class Mpi_relax:
             # Calculate the distances
             res_distance = distance_dict.copy()
             for key, value in distance_dict.items():
-                res_distance[key] = self.distance(pose, value[0], value[1])
+                res_distance[key] = self.distance(test_pose, value[0], value[1])
             # n_salt_bidges = self.get_salt_bridges(f"{job_output}_R{rank}_I{i}_0.pdb", "pdb")
 
             # Gather results

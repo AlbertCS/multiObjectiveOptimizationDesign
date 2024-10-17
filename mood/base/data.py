@@ -47,10 +47,14 @@ class AlgorithmDataSingleton:
         """
         self._sequences = {}
 
-    def add_sequence(self, chain, new_sequence) -> bool:
+    def add_sequences(self, chain, new_sequences):
         """Returns True if the sequence was added successfully, False otherwise."""
-        if new_sequence.sequence in self.sequences.get(chain).keys():
-            return False
-        else:
-            self.sequences[chain][new_sequence.sequence] = new_sequence
-            return True
+        for sequence in new_sequences:
+            if sequence.sequence in self.sequences.get(chain).keys():
+                continue
+            else:
+                self.sequences[chain][sequence.sequence] = sequence
+
+    def sequence_exists(self, chain, sequence):
+        # Returns True if the sequence exists in the chain, False otherwise.
+        return sequence in self.sequences.get(chain).keys()
