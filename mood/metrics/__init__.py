@@ -1,6 +1,6 @@
 from .alphabetic import Alphabet
 from .metric import Metric
-from .pyrosettaMetrics import RosettaMetrics
+from .pyrosetta_Metrics import RosettaMetrics
 
 # Set the exported modules
 __all__ = ["Metric", "Alphabet", "RosettaMetrics"]

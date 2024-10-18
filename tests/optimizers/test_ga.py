@@ -18,7 +18,7 @@ class TestGeneticAlgorithm(unittest.TestCase):
         self.data = AlgorithmDataSingleton(sequences=sequences, chains=self.chains)
         eval_mutations_params = {
             "cst_file": "tests/data/Felip9/FeLip9-PET-1_CA.cst",
-            "min_energy_threshold": 1,
+            "min_energy_threshold": 0,
             "seed": 12345,
             "params_folder": "tests/data/Felip9/PET_params",
             "native_pdb": "tests/data/Felip9/FeLip9-PET-1.pdb",
@@ -31,11 +31,11 @@ class TestGeneticAlgorithm(unittest.TestCase):
             # },
             mutable_aa={
                 "A": {
-                    34: ["H", "D", "Q", "S", "K", "M", "F", "L", "T", "A", "C"],
-                    36: ["R", "E", "D", "K", "A", "M", "S", "H", "L"],
-                    55: ["A", "Q", "E", "M", "L", "V", "C", "D", "K", "S", "F"],
-                    66: ["Q", "R", "E", "A", "M", "L", "S", "F", "H"],
-                    70: [
+                    33: ["H", "D", "Q", "S", "K", "M", "F", "L", "T", "A", "C"],
+                    35: ["R", "E", "D", "K", "A", "M", "S", "H", "L"],
+                    54: ["A", "Q", "E", "M", "L", "V", "C", "D", "K", "S", "F"],
+                    65: ["Q", "R", "E", "A", "M", "L", "S", "F", "H"],
+                    69: [
                         "Q",
                         "D",
                         "S",
@@ -50,12 +50,12 @@ class TestGeneticAlgorithm(unittest.TestCase):
                         "C",
                         "E",
                     ],
-                    113: ["E", "D", "H", "Q", "S", "A", "C", "K", "N", "T", "V", "M"],
-                    120: ["S", "D", "H", "Q", "T", "C", "G", "A", "R", "K"],
-                    121: ["D", "S", "H", "T", "C", "V", "Y", "K", "Q", "F"],
-                    122: ["S", "H", "D", "K", "M", "R", "T", "A"],
-                    155: ["L", "C", "F", "M", "S", "A", "H", "I", "T"],
-                    156: ["H", "S", "T", "C", "D", "V"],
+                    112: ["E", "D", "H", "Q", "S", "A", "C", "K", "N", "T", "V", "M"],
+                    119: ["S", "D", "H", "Q", "T", "C", "G", "A", "R", "K"],
+                    120: ["D", "S", "H", "T", "C", "V", "Y", "K", "Q", "F"],
+                    121: ["S", "H", "D", "K", "M", "R", "T", "A"],
+                    154: ["L", "C", "F", "M", "S", "A", "H", "I", "T"],
+                    155: ["H", "S", "T", "C", "D", "V"],
                     # 184: ["K", "Q", "A", "R"],
                 }
             },
@@ -81,23 +81,23 @@ class TestGeneticAlgorithm(unittest.TestCase):
         sequence = "ATGCKPLQWR"
         self.ga.mutable_aa = {
             "A": {
-                1: ["S", "P"],
-                2: ["M"],
-                3: ["S", "C"],
-                4: ["G", "A"],
-                6: ["A", "P", "C"],
-                7: ["Q", "L"],
-                10: ["N"],
+                0: ["S", "P"],
+                1: ["M"],
+                2: ["S", "C"],
+                3: ["G", "A"],
+                5: ["A", "P", "C"],
+                6: ["Q", "L"],
+                9: ["N"],
             }
         }
         mutated_seq1, mut = self.ga.generate_mutation_sequence(
             sequence_to_mutate=sequence, chain="A"
         )
-        self.assertEqual(mutated_seq1, "ATGCKPLQWR")
+        self.assertEqual(mutated_seq1, "ATGCKPQQWR")
         self.assertEqual(
             mut,
             [
-                ("Q", 7, "Q"),
+                ("L", 6, "Q"),
             ],
         )
         mutated_seq2, mut = self.ga.generate_mutation_sequence(
@@ -153,7 +153,19 @@ class TestGeneticAlgorithm(unittest.TestCase):
         seq1 = "IIIIIIIIII"
         seq2 = "LLLLLLLLLL"
         self.ga.mutable_aa = {
-            "A": {1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [], 8: [], 9: [], 10: []}
+            "A": {
+                1: [],
+                1: [],
+                2: [],
+                3: [],
+                4: [],
+                5: [],
+                6: [],
+                7: [],
+                8: [],
+                9: [],
+                10: [],
+            }
         }
         crossover_seq = self.ga.single_point_crossover(
             seq1, seq2, crossover_point=6, chain="A"

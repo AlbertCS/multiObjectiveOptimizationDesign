@@ -92,6 +92,7 @@ class GeneticAlgorithm(Optimizer):
         starting_sequence=None,
         mutated_sequence=None,
         cst_file=None,
+        energy_threshold=1,
     ):
         import pyrosetta as prs
         from pyrosetta import toolbox
@@ -206,14 +207,24 @@ class GeneticAlgorithm(Optimizer):
         fastrelax_mover.set_movemap_factory(mmf_relax)
         fastrelax_mover.set_task_factory(tf_sampling)
 
+        initial_energy_mutated_pose = sfxn_scorer(mutated_pose)
+
         for step in range(1, minimization_steps + 1):
             fastrelax_mover.apply(starting_pose)
             final_energy_starting_pose = sfxn_scorer(starting_pose)
+            fastrelax_mover.apply(mutated_pose)
             final_energy_mutated_pose = sfxn_scorer(mutated_pose)
 
+            dE = final_energy_mutated_pose - initial_energy_mutated_pose
+            if abs(dE) < abs(energy_threshold):
+                break
+            initial_energy_mutated_pose = final_energy_mutated_pose
+
         if step == minimization_steps - 1:
-            print(f"Maximum number of relax iterations ({minimization_steps}) reached.")
-            print("Energy convergence failed!")
+            self.logger.warning(
+                f"Maximum number of relax iterations ({minimization_steps}) reached."
+            )
+            self.logger.warning("Energy convergence failed!")
 
         return final_energy_starting_pose - final_energy_mutated_pose
 
@@ -229,14 +240,14 @@ class GeneticAlgorithm(Optimizer):
         if len(sequences_initial) == 0:
             self.logger.error("No initial sequences provided")
             raise ValueError("No initial sequences provided")
-        self.child_sequences = []
+        child_sequences = []
 
         try:
             # Adding the initial sequences to the population
+            i = self.data.nsequences(chain)
+            sequences_to_add = []
             for sequence in sequences_initial:
-                i = self.data.nsequences(chain) + 1
-                self.data.add_sequence(
-                    chain,
+                sequences_to_add.append(
                     Sequence(
                         sequence=sequence,
                         chain=chain,
@@ -244,15 +255,17 @@ class GeneticAlgorithm(Optimizer):
                         active=True,
                     ),
                 )
-                self.child_sequences.append(sequence)
+                i += 1
+                child_sequences.append(sequence)
+            self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
 
             # Getting the number of missing sequences
-            n_missing = self.population_size - len(self.child_sequences)
+            n_missing = self.population_size - len(child_sequences)
             self.logger.debug(
-                f"Initial child sequences:\n{chr(10).join(self.child_sequences)}"
+                f"Initial child sequences:\n{chr(10).join(child_sequences)}"
             )
             # Calculating the index of the next sequence to generate
-            index = len(self.child_sequences)
+            index = len(child_sequences)
             if n_missing == 0:
                 self.logger.info("Population already at the desired size")
             else:
@@ -266,11 +279,12 @@ class GeneticAlgorithm(Optimizer):
                     )
                 # Adding sequences by mutation until the desired percentage is reached
                 while (
-                    len(self.child_sequences)
+                    len(child_sequences)
                     < self.population_size * self.mutation_seq_percent
                 ):
+                    seq_index = self.data.nsequences(chain)
                     # Select a sequence to mutate
-                    sequence_to_start_from = self.rng.choice(self.child_sequences)
+                    sequence_to_start_from = self.rng.choice(child_sequences)
 
                     mutated_sequence, mut = self.generate_mutation_sequence(
                         chain=chain,
@@ -281,60 +295,90 @@ class GeneticAlgorithm(Optimizer):
                     # Evaluate the mutation with rosetta
                     if self.eval_mutations:
                         dEnergy = self.local_relax(
-                            residues=mut[0][1],
+                            residues=[mut[0][1]],
                             moving_chain=chain,
                             starting_sequence=sequence_to_start_from,
                             mutated_sequence=mutated_sequence,
                             cst_file=self.eval_mutations_params["cst_file"],
                         )
-                        if dEnergy < self.eval_mutations_params["min_energy_threshold"]:
+                        if abs(dEnergy) < abs(
+                            self.eval_mutations_params["min_energy_threshold"]
+                        ):
                             continue
+                        self.logger.debug(f"Mutation energy: {dEnergy} accepted")
                     # Add the new sequence to the data object and iter_sequences
-                    added = self.data.add_sequence(
-                        chain=chain,
-                        new_sequence=Sequence(
-                            sequence=mutated_sequence,
-                            chain=chain,
-                            index=self.data.nsequences(chain) + 1,
-                            active=True,
-                            mutations=mut,
-                            native=self.native,
-                        ),
-                    )
-                    if added:
-                        self.child_sequences.append(mutated_sequence)
+                    if not self.data.sequence_exists(chain, mutated_sequence):
+                        child_sequences.append(mutated_sequence)
+                        sequences_to_add.append(
+                            Sequence(
+                                sequence=mutated_sequence,
+                                chain=chain,
+                                index=seq_index,
+                                active=True,
+                                mutations=mut,
+                                native=self.native,
+                            ),
+                        )
+                        seq_index += 1
 
+                self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
                 self.logger.debug(
-                    f"Child population after mutation:\n{chr(10).join(self.child_sequences)}"
+                    f"Child population after mutation:\n{chr(10).join(child_sequences)}"
                 )
 
+                same_parents_attempts = 0
+                general_attempt = 0
                 # Adding sequences by crossover until the desired population size is reached
-                while len(self.child_sequences) < self.population_size:
-                    # Get two random sequences to crossover
-                    crossover_sequence = self.generate_crossover_sequence(
-                        sequences_pool=self.child_sequences, chain=chain
-                    )
-                    # TODO: Add mover for calculating the energy of the new sequence
-                    # Add the new sequence to the data object
-                    added = self.data.add_sequence(
-                        chain=chain,
-                        new_sequence=Sequence(
-                            sequence=crossover_sequence,
-                            chain=chain,
-                            index=self.data.nsequences(chain) + 1,
-                            active=True,
-                            mutations=None,
-                            native=self.native,
-                        ),
-                    )
+                while len(child_sequences) < self.population_size:
+                    seq_index = self.data.nsequences(chain)
+                    # Select the parents sequences
+                    sequence1 = random.choice(child_sequences)
+                    sequence2 = random.choice(child_sequences)
+                    # Check that the sequences are different
+                    while sequence1 == sequence2:
+                        sequence2 = random.choice(child_sequences)
+                    while same_parents_attempts < 10:
+                        child_sequence = self.generate_crossover_sequence(
+                            sequence1=sequence1, sequence2=sequence2, chain=chain
+                        )
+                        # If the sequence does not exist, add it to the list of sequences to add
+                        if not self.data.sequence_exists(chain, child_sequence):
+                            child_sequences.append(child_sequence)
+                            sequences_to_add.append(
+                                Sequence(
+                                    sequence=child_sequence,
+                                    chain=chain,
+                                    index=seq_index,
+                                    active=True,
+                                    mutations=None,
+                                    native=self.native,
+                                ),
+                            )
+                            seq_index += 1
+                            general_attempt = 0
+                            same_parents_attempts = 0
+                            break
 
-                    if added:
-                        self.child_sequences.append(crossover_sequence)
+                        same_parents_attempts += 1
+
+                    if general_attempt > 100:
+                        # If the number of attempts to generate a new sequence is exceeded, switch to mutation
+                        self.logger.info(
+                            f"Exceeded the number of attempts to generate a new sequence, switching to mutation"
+                        )
+                        sequences_to_add = self.mutation_on_crossover(
+                            child_sequences, chain
+                        )
+                        break
+                    general_attempt += 1
+
+                # Add sequences tot the data object
+                self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
                 self.logger.debug(
-                    f"Child population after crossover:\n{chr(10).join(self.child_sequences)}"
+                    f"Child population after crossover:\n{chr(10).join(child_sequences)}"
                 )
 
-            return self.child_sequences
+            return child_sequences
         except Exception as e:
             self.logger.error(f"Error initializing the population: {e}")
             raise ValueError(f"Error initializing the population: {e}")
@@ -415,7 +459,7 @@ class GeneticAlgorithm(Optimizer):
         self.logger.debug("Performing a two-point crossover")
         recombined_sequence = list(sequence1)
         if start is None:
-            start = self.rng.randint(1, len(sequence1) + 1)
+            start = self.rng.randint(0, len(sequence1) + 1)
         if end is None:
             end = self.rng.randint(start, len(sequence1) + 1)
         for i in range(start, end + 1):
@@ -429,7 +473,7 @@ class GeneticAlgorithm(Optimizer):
         self.logger.debug("Performing a single-point crossover")
         recombined_sequence = list(sequence1)
         if crossover_point is None:
-            crossover_point = self.rng.randint(1, len(sequence1) + 1)
+            crossover_point = self.rng.randint(0, len(sequence1) + 1)
         for i in range(crossover_point, len(sequence1) + 1):
             if i in self.mutable_aa[chain].keys():
                 recombined_sequence[i - 1] = sequence2[i - 1]
@@ -498,7 +542,7 @@ class GeneticAlgorithm(Optimizer):
         mut = []
         if self.mutable_aa == {}:
             raise ValueError("No mutable amino acids provided")
-        for _ in range(self.rng.choice(list(range(max_mutations_recomb + 1)))):
+        for _ in range(self.rng.choice(list(range(1, max_mutations_recomb + 1)))):
             position = self.rng.choice(list(self.mutable_aa[chain].keys()))
             new_aa = self.rng.choice(self.mutable_aa[chain][position])
             sequence_to_mutate_list[position] = new_aa
@@ -506,38 +550,121 @@ class GeneticAlgorithm(Optimizer):
 
         return "".join(sequence_to_mutate_list), mut
 
+    def mutation_on_crossover(self, parent_sequences, chain):
+        child_sequences = []
+        sequences_to_add = []
+        attemps = 0
+        while len(child_sequences) < self.population_size:
+            seq_index = self.data.nsequences(chain)
+            sequence_to_start_from = self.rng.choice(parent_sequences)
+            child_sequence, mut = self.generate_mutation_sequence(
+                chain=chain,
+                sequence_to_mutate=sequence_to_start_from,
+                max_mutations_recomb=self.max_mutation_per_iteration,
+            )
+            # TODO may need to adapt to a more than one mutation per iteration
+            # Evaluate the mutation with rosetta
+            if self.eval_mutations:
+                dEnergy = self.local_relax(
+                    residues=[mut[0][1]],
+                    moving_chain=chain,
+                    starting_sequence=sequence_to_start_from,
+                    mutated_sequence=child_sequence,
+                    cst_file=self.eval_mutations_params["cst_file"],
+                )
+                if abs(dEnergy) < abs(
+                    self.eval_mutations_params["min_energy_threshold"]
+                ):
+                    continue
+            # If the sequence does not exist, add it to the list of sequences to add
+            if not self.data.sequence_exists(chain, child_sequence):
+                child_sequences.append(child_sequence)
+                sequences_to_add.append(
+                    Sequence(
+                        sequence=child_sequence,
+                        chain=chain,
+                        index=seq_index,
+                        active=True,
+                        mutations=mut,
+                        native=self.native,
+                    ),
+                )
+                seq_index += 1
+            if attemps > 1000:
+                self.logger.error(
+                    f"Exceeded the number of attempts to generate a new sequence"
+                )
+                raise ValueError(
+                    f"Exceeded the number of attempts to generate a new sequence"
+                )
+            attemps += 1
+        return sequences_to_add
+
     def generate_child_population(
         self,
         parent_sequences,
         chain=None,
         current_iteration=None,
     ):
-        self.child_sequences = []
+        child_sequences = []
+        sequences_to_add = []
         cycle_pos = current_iteration % self.cycle_length
 
         if cycle_pos < self.crossover_iterations:
-            self.logger.debug(f"Iteration {current_iteration} - Crossover")
-            while len(self.child_sequences) < self.population_size:
-                child_sequence = self.generate_crossover_sequence(
-                    sequences_pool=parent_sequences, chain=chain
-                )
-                added = self.data.add_sequence(
-                    chain=chain,
-                    new_sequence=Sequence(
-                        sequence=child_sequence,
-                        chain=chain,
-                        index=self.data.nsequences(chain) + 1,
-                        active=True,
-                        mutations=None,
-                        native=self.native,
-                    ),
-                )
-                if added:
-                    self.child_sequences.append(child_sequence)
-                # TODO may need in a future, if we can not generate more sequences via crossover generate them via mutation
+            self.logger.info(f"Iteration {current_iteration} - Crossover")
+            general_attempt = 0
+            same_parents_attempts = 0
+            while len(child_sequences) < self.population_size:
+                seq_index = self.data.nsequences(chain)
+                # Select the parents sequences
+                sequence1 = random.choice(parent_sequences)
+                sequence2 = random.choice(parent_sequences)
+                # Check that the sequences are different
+                while sequence1 == sequence2:
+                    sequence2 = random.choice(parent_sequences)
+                while same_parents_attempts < 10:
+                    child_sequence = self.generate_crossover_sequence(
+                        sequence1=sequence1, sequence2=sequence2, chain=chain
+                    )
+                    # If the sequence does not exist, add it to the list of sequences to add
+                    if not self.data.sequence_exists(chain, child_sequence):
+                        child_sequences.append(child_sequence)
+                        sequences_to_add.append(
+                            Sequence(
+                                sequence=child_sequence,
+                                chain=chain,
+                                index=seq_index,
+                                active=True,
+                                mutations=None,
+                                native=self.native,
+                            ),
+                        )
+                        seq_index += 1
+                        general_attempt = 0
+                        same_parents_attempts = 0
+                        break
+
+                    same_parents_attempts += 1
+
+                if general_attempt > 100:
+                    # If the number of attempts to generate a new sequence is exceeded, switch to mutation
+                    self.logger.info(
+                        f"Exceeded the number of attempts to generate a new sequence, switching to mutation"
+                    )
+                    sequences_to_add = self.mutation_on_crossover(
+                        parent_sequences, chain
+                    )
+                    break
+
+                general_attempt += 1
+            # Add sequences tot the data object
+            self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
+
         else:
-            self.logger.debug(f"Iteration {current_iteration} - Mutation")
-            while len(self.child_sequences) < self.population_size:
+            self.logger.info(f"Iteration {current_iteration} - Mutation")
+            attemps = 0
+            while len(child_sequences) < self.population_size:
+                seq_index = self.data.nsequences(chain)
                 sequence_to_start_from = self.rng.choice(parent_sequences)
                 child_sequence, mut = self.generate_mutation_sequence(
                     chain=chain,
@@ -547,28 +674,39 @@ class GeneticAlgorithm(Optimizer):
                 # TODO may need to adapt to a more than one mutation per iteration
                 # Evaluate the mutation with rosetta
                 if self.eval_mutations:
-                    pass
                     dEnergy = self.local_relax(
-                        residues=mut[0][1],
+                        residues=[mut[0][1]],
                         moving_chain=chain,
                         starting_sequence=sequence_to_start_from,
                         mutated_sequence=child_sequence,
                         cst_file=self.eval_mutations_params["cst_file"],
                     )
-                    if dEnergy < self.eval_mutations_params["min_energy_threshold"]:
+                    if abs(dEnergy) < abs(
+                        self.eval_mutations_params["min_energy_threshold"]
+                    ):
                         continue
-                added = self.data.add_sequence(
-                    chain=chain,
-                    new_sequence=Sequence(
-                        sequence=child_sequence,
-                        chain=chain,
-                        index=self.data.nsequences(chain) + 1,
-                        active=True,
-                        mutations=mut,
-                        native=self.native,
-                    ),
-                )
-                if added:
-                    self.child_sequences.append(child_sequence)
-
-        return self.child_sequences
+                    self.logger.debug(f"Mutation energy: {dEnergy} accepted")
+                # If the sequence does not exist, add it to the list of sequences to add
+                if not self.data.sequence_exists(chain, child_sequence):
+                    child_sequences.append(child_sequence)
+                    sequences_to_add.append(
+                        Sequence(
+                            sequence=child_sequence,
+                            chain=chain,
+                            index=seq_index,
+                            active=True,
+                            mutations=mut,
+                            native=self.native,
+                        ),
+                    )
+                    seq_index += 1
+                if attemps > 1000:
+                    self.logger.error(
+                        f"Exceeded the number of attempts to generate a new sequence"
+                    )
+                    raise ValueError(
+                        f"Exceeded the number of attempts to generate a new sequence"
+                    )
+                attemps += 1
+            self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
+        return child_sequences
