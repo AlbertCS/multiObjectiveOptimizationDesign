@@ -382,6 +382,7 @@ class MultiObjectiveOptimization:
             + ", ".join([metric.__class__.__name__ for metric in self.metrics])
         )
         self.logger.info("\tMax Iteration: " + str(self.max_iteration))
+        self.logger.info("\tPopulation Size: " + str(self.population_size))
         self.logger.info("\tSeed: " + str(self.seed))
         self.logger.info("------------------------------------------------")
 
@@ -464,12 +465,14 @@ class MultiObjectiveOptimization:
                 metric_df.set_index("Sequence", inplace=True)
                 metric_states = {}
                 metric_objectives = []
+                metric_result = None
                 for metric in self.metrics:
                     metric_result = metric.compute(
                         sequences=sequences_to_evaluate_str,
                         iteration=self.current_iteration,
                         folder_name=self.folder_name,
                     )
+                    self.logger.info(f"Metric {metric.name} calculated")
                     metric_df = metric_df.merge(metric_result, on="Sequence")
                     metric_states[metric.name] = metric.state
                     metric_objectives.extend(metric.objectives)

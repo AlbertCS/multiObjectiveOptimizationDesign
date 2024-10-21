@@ -3,9 +3,6 @@ import os
 import shutil
 import unittest
 
-from Bio.Seq import Seq
-from icecream import ic
-
 from mood.base.data import AlgorithmDataSingleton
 from mood.metrics.proteinMPNN_Metrics import ProteinMPNNMetrics
 from mood.metrics.pyrosetta_Metrics import RosettaMetrics
@@ -33,7 +30,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             ProteinMPNNMetrics(chain="A", seed=1235, native_pdb=native_pdb),
         ]
         debug = True
-        max_iteration = 5
+        max_iteration = 50
         population_size = 20
         seed = 1235
 
