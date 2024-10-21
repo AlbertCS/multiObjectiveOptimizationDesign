@@ -107,7 +107,7 @@ class ProteinMPNNMetrics(Metric):
             sampling_temp=self.sampling_temp,
             score_only=self.score_only,
             batch_size=self.batch_size,
-            suppress_print=False,
+            suppress_print=True,
         )
 
         if not os.path.exists(f"{output_folder}/score_only"):
