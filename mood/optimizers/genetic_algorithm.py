@@ -266,6 +266,7 @@ class GeneticAlgorithm(Optimizer):
             )
             # Calculating the index of the next sequence to generate
             index = len(child_sequences)
+            seq_index = self.data.nsequences(chain)
             if n_missing == 0:
                 self.logger.info("Population already at the desired size")
             else:
@@ -278,13 +279,10 @@ class GeneticAlgorithm(Optimizer):
                         f"Populating {self.mutation_seq_percent * 100}% of the {self.population_size} total population"
                     )
                 # Adding sequences by mutation until the desired percentage is reached
-                while (
-                    len(child_sequences)
-                    < self.population_size * self.mutation_seq_percent
-                ):
-                    seq_index = self.data.nsequences(chain)
-                    # Select a sequence to mutate
-                    sequence_to_start_from = self.rng.choice(child_sequences)
+                while len(child_sequences) < self.population_size:
+                    # Select a sequence to mutate, if we choose the native sequence, we will have a new sequence with only one mutation
+                    # if we select a sequence from the child_sequences, we will have a new sequence with more than one mutation
+                    sequence_to_start_from = self.rng.choice(sequences_initial)
 
                     mutated_sequence, mut = self.generate_mutation_sequence(
                         chain=chain,
@@ -307,7 +305,10 @@ class GeneticAlgorithm(Optimizer):
                             continue
                         self.logger.debug(f"Mutation energy: {dEnergy} accepted")
                     # Add the new sequence to the data object and iter_sequences
-                    if not self.data.sequence_exists(chain, mutated_sequence):
+                    if (
+                        not self.data.sequence_exists(chain, mutated_sequence)
+                        and mutated_sequence not in child_sequences
+                    ):
                         child_sequences.append(mutated_sequence)
                         sequences_to_add.append(
                             Sequence(
@@ -322,60 +323,11 @@ class GeneticAlgorithm(Optimizer):
                         seq_index += 1
 
                 self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
-                self.logger.debug(
-                    f"Child population after mutation:\n{chr(10).join(child_sequences)}"
-                )
-
-                same_parents_attempts = 0
-                general_attempt = 0
-                # Adding sequences by crossover until the desired population size is reached
-                while len(child_sequences) < self.population_size:
-                    seq_index = self.data.nsequences(chain)
-                    # Select the parents sequences
-                    sequence1 = random.choice(child_sequences)
-                    sequence2 = random.choice(child_sequences)
-                    # Check that the sequences are different
-                    while sequence1 == sequence2:
-                        sequence2 = random.choice(child_sequences)
-                    while same_parents_attempts < 10:
-                        child_sequence = self.generate_crossover_sequence(
-                            sequence1=sequence1, sequence2=sequence2, chain=chain
-                        )
-                        # If the sequence does not exist, add it to the list of sequences to add
-                        if not self.data.sequence_exists(chain, child_sequence):
-                            child_sequences.append(child_sequence)
-                            sequences_to_add.append(
-                                Sequence(
-                                    sequence=child_sequence,
-                                    chain=chain,
-                                    index=seq_index,
-                                    active=True,
-                                    mutations=None,
-                                    native=self.native,
-                                ),
-                            )
-                            seq_index += 1
-                            general_attempt = 0
-                            same_parents_attempts = 0
-                            break
-
-                        same_parents_attempts += 1
-
-                    if general_attempt > 100:
-                        # If the number of attempts to generate a new sequence is exceeded, switch to mutation
-                        self.logger.info(
-                            f"Exceeded the number of attempts to generate a new sequence, switching to mutation"
-                        )
-                        sequences_to_add = self.mutation_on_crossover(
-                            child_sequences, chain
-                        )
-                        break
-                    general_attempt += 1
-
-                # Add sequences tot the data object
-                self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
-                self.logger.debug(
-                    f"Child population after crossover:\n{chr(10).join(child_sequences)}"
+                # self.logger.debug(
+                #     f"Child population after mutation:\n{chr(10).join(child_sequences)}"
+                # )
+                self.logger.info(
+                    f"Population initialized with mutation: {len(child_sequences)}"
                 )
 
             return child_sequences
@@ -444,12 +396,16 @@ class GeneticAlgorithm(Optimizer):
         sequence1,
         sequence2,
         chain,
-        percent_recomb=0.3,
+        percent_recomb=0.5,
     ) -> str:
         recombined_sequence = list(sequence1)
+
+        mut = []
         for i in self.mutable_aa[chain].keys():
-            if self.rng.random() < percent_recomb:
-                recombined_sequence[i - 1] = sequence2[i - 1]
+            if recombined_sequence[i] != sequence2[i]:
+                if self.rng.random() < percent_recomb:
+                    recombined_sequence[i] = sequence2[i]
+                    mut.append((sequence1[i], i, sequence2[i]))
 
         return "".join(recombined_sequence)
 
@@ -577,7 +533,10 @@ class GeneticAlgorithm(Optimizer):
                 ):
                     continue
             # If the sequence does not exist, add it to the list of sequences to add
-            if not self.data.sequence_exists(chain, child_sequence):
+            if (
+                not self.data.sequence_exists(chain, child_sequence)
+                and child_sequence not in child_sequences
+            ):
                 child_sequences.append(child_sequence)
                 sequences_to_add.append(
                     Sequence(
@@ -627,7 +586,10 @@ class GeneticAlgorithm(Optimizer):
                         sequence1=sequence1, sequence2=sequence2, chain=chain
                     )
                     # If the sequence does not exist, add it to the list of sequences to add
-                    if not self.data.sequence_exists(chain, child_sequence):
+                    if (
+                        not self.data.sequence_exists(chain, child_sequence)
+                        and child_sequence not in child_sequences
+                    ):
                         child_sequences.append(child_sequence)
                         sequences_to_add.append(
                             Sequence(
@@ -657,8 +619,11 @@ class GeneticAlgorithm(Optimizer):
                     break
 
                 general_attempt += 1
+                same_parents_attempts = 0
+
             # Add sequences tot the data object
             self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
+            self.logger.info(f"Population on crossover: {len(sequences_to_add)}")
 
         else:
             self.logger.info(f"Iteration {current_iteration} - Mutation")
@@ -687,7 +652,10 @@ class GeneticAlgorithm(Optimizer):
                         continue
                     self.logger.debug(f"Mutation energy: {dEnergy} accepted")
                 # If the sequence does not exist, add it to the list of sequences to add
-                if not self.data.sequence_exists(chain, child_sequence):
+                if (
+                    not self.data.sequence_exists(chain, child_sequence)
+                    and child_sequence not in child_sequences
+                ):
                     child_sequences.append(child_sequence)
                     sequences_to_add.append(
                         Sequence(
@@ -709,4 +677,6 @@ class GeneticAlgorithm(Optimizer):
                     )
                 attemps += 1
             self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
+            self.logger.info(f"Population on Mutation: {len(sequences_to_add)}")
+
         return child_sequences
