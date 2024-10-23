@@ -9,28 +9,46 @@ from mood.metrics import Metric
 
 
 class RosettaMetrics(Metric):
-    def __init__(self, params_folder, cpus, seed, native_pdb, distances_file, cst_file):
+    def __init__(
+        self,
+        params_folder,
+        cpus,
+        seed,
+        native_pdb,
+        distances_file=None,
+        cst_file=None,
+        ligand_chain=None,
+    ):
         super().__init__()
         self.state = {
             "Relax_Energy": "negative",
-            "Interface_Score": "negative",
-            "Apo_Score": "negative",
             "Hydrophobic_Score": "negative",
             "Salt_Bridges": "positive",
-            "distances": "negative",
         }
-        self._objectives = ["Relax_Energy", "Interface_Score"]
+        self._objectives = ["Relax_Energy"]
         self.name = "rosettaMetrics"
         self.params_folder = params_folder
         self.cpus = cpus
         self.seed = seed
         self.native_pdb = native_pdb
         self.distances_file = distances_file
+        if self.distances_file is not None:
+            self.state["distances"] = "negative"
         self.cst_file = cst_file
+        self.ligand_chain = ligand_chain
+        # If there is a ligand add the metrics related to the ligand
+        if self.ligand_chain is not None:
+            self._objectives.append("Interface_Score")
+            self.state["Interface_Score"] = "negative"
+            self.state["Apo_Score"] = "negative"
 
     @property
     def objectives(self):
         return self._objectives
+    
+    @objectives.setter
+    def objectives(self, value):
+        self._objectives = value
 
     def _copyScriptFile(
         self, output_folder, script_name, no_py=False, subfolder=None, hidden=True
@@ -105,6 +123,7 @@ class RosettaMetrics(Metric):
             cmd += f"--native_pdb {self.native_pdb} "
             cmd += f"--distances {self.distances_file} "
             cmd += f"--cst_file {self.cst_file} "
+            cmd += f"--ligand_chain {self.ligand_chain}"
 
             proc = subprocess.Popen(
                 cmd,

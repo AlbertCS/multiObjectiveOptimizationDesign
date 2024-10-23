@@ -24,8 +24,9 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
                 cpus=cpus,
                 seed=1235,
                 native_pdb=native_pdb,
-                distances_file=distances_file,
-                cst_file=cst_file,
+                ligand_chain="L",
+                # distances_file=distances_file,
+                # cst_file=cst_file,
             ),
             ProteinMPNNMetrics(chain="A", seed=1235, native_pdb=native_pdb),
         ]
@@ -45,8 +46,8 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             design = json.load(f)
         mutable_aa = {"A": design}
         folder_name = "mood_job"
-        if os.path.exists(folder_name):
-            shutil.rmtree(folder_name)
+        # if os.path.exists(folder_name):
+        #     shutil.rmtree(folder_name)
         self.moo = MultiObjectiveOptimization(
             optimizer=optimizer,
             metrics=metrics,
@@ -61,8 +62,6 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             population_size=population_size,
             offset=1,
         )
-        if os.path.exists("mood_job"):
-            shutil.rmtree("mood_job")
 
     def test_run(self):
         self.moo.run()

@@ -330,7 +330,7 @@ class GeneticAlgorithm(Optimizer):
                     f"Population initialized with mutation: {len(child_sequences)}"
                 )
 
-            return child_sequences
+            return child_sequences, sequences_to_add
         except Exception as e:
             self.logger.error(f"Error initializing the population: {e}")
             raise ValueError(f"Error initializing the population: {e}")
@@ -679,4 +679,4 @@ class GeneticAlgorithm(Optimizer):
             self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
             self.logger.info(f"Population on Mutation: {len(sequences_to_add)}")
 
-        return child_sequences
+        return child_sequences, sequences_to_add
