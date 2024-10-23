@@ -28,7 +28,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
                 # distances_file=distances_file,
                 # cst_file=cst_file,
             ),
-            ProteinMPNNMetrics(chain="A", seed=1235, native_pdb=native_pdb),
+            ProteinMPNNMetrics(chain="A", seed=1235, native_pdb=native_pdb, sampling_temp="0.3"),
         ]
         debug = True
         max_iteration = 50
@@ -36,9 +36,6 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         seed = 1235
 
         chains = ["A"]
-        # mutable_positions = {
-        #     "A": [34, 36, 55, 66, 70, 113, 120, 121, 122, 155, 156, 184]
-        # }
         with open(
             "tests/data/Felip9/design_library_glide.json",
             "r",
@@ -46,8 +43,8 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             design = json.load(f)
         mutable_aa = {"A": design}
         folder_name = "mood_job"
-        # if os.path.exists(folder_name):
-        #     shutil.rmtree(folder_name)
+        if os.path.exists(folder_name):
+            shutil.rmtree(folder_name)
         self.moo = MultiObjectiveOptimization(
             optimizer=optimizer,
             metrics=metrics,

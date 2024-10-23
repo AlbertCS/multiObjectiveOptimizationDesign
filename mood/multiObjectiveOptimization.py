@@ -490,6 +490,13 @@ class MultiObjectiveOptimization:
 
                 # Evaluate the population and rank the individuals
                 self.logger.info("Evaluating and ranking the population")
+                # If the iteration is not the first, add the previous iteration sequences to the evaluation
+                if self.current_iteration != 0:
+                    with open(f"{self.folder_name}/{str(self.current_iteration - 1).zfill(3)}/{self.data_frame_file_name}", "rb") as f:
+                        metric_df_previ=pd.DataFrame(pickle.load(f)[chain])
+                    metric_df = pd.concat([metric_df, metric_df_previ], ignore_index=True)
+                    metric_df.drop(columns=["Ranks"], inplace=True)
+                    
                 # Returns a dataframe with the sequences and the metrics, and a column with the rank
                 evaluated_sequences_df[chain] = self.optimizer.eval_population(
                     df=metric_df,
