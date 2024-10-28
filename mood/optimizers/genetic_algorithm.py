@@ -330,7 +330,7 @@ class GeneticAlgorithm(Optimizer):
                     f"Population initialized with mutation: {len(child_sequences)}"
                 )
 
-            return child_sequences
+            return child_sequences, sequences_to_add
         except Exception as e:
             self.logger.error(f"Error initializing the population: {e}")
             raise ValueError(f"Error initializing the population: {e}")
@@ -434,6 +434,71 @@ class GeneticAlgorithm(Optimizer):
             if i in self.mutable_aa[chain].keys():
                 recombined_sequence[i - 1] = sequence2[i - 1]
         return "".join(recombined_sequence)
+
+    def non_dominated_sorting(df, maximize_metrics):
+        """
+        Perform non-dominated sorting on a DataFrame with multiple metrics.
+
+        Parameters:
+        - df (pd.DataFrame): DataFrame where each column is a metric to evaluate.
+        - maximize_metrics (dict): A dictionary where keys are column names and values are booleans
+                                indicating whether to maximize (True) or minimize (False) the corresponding metric.
+
+        Returns:
+        - list of lists: Each sublist represents a Pareto front, with the best front first.
+        """
+        n = len(df)
+        fronts = [[] for _ in range(n)]
+        domination_counts = [0] * n  # Number of times each point is dominated
+        dominated_points = [[] for _ in range(n)]  # Points each point dominates
+        ranks = [0] * n
+
+        # Convert DataFrame index to list for easy access
+        indices = df.index.tolist()
+
+        for i in range(n):
+            for j in range(n):
+                if i != j:
+                    a = df.iloc[i]
+                    b = df.iloc[j]
+                    dominates = True
+                    strictly_better = False
+
+                    for metric, maximize in maximize_metrics.items():
+                        if maximize:
+                            if a[metric] < b[metric]:
+                                dominates = False
+                            elif a[metric] > b[metric]:
+                                strictly_better = True
+                        else:
+                            if a[metric] > b[metric]:
+                                dominates = False
+                            elif a[metric] < b[metric]:
+                                strictly_better = True
+
+                    # Check if point `i` dominates point `j`
+                    if dominates and strictly_better:
+                        dominated_points[i].append(j)
+                        domination_counts[j] += 1
+
+        # Identify the first front (non-dominated points)
+        current_front = [i for i in range(n) if domination_counts[i] == 0]
+        front_index = 0
+
+        while current_front:
+            next_front = []
+            for p in current_front:
+                ranks[p] = front_index + 1
+                for dominated in dominated_points[p]:
+                    domination_counts[dominated] -= 1
+                    if domination_counts[dominated] == 0:
+                        next_front.append(dominated)
+            fronts[front_index] = [indices[idx] for idx in current_front]
+            current_front = next_front
+            front_index += 1
+
+        # Remove empty fronts and return
+        return [front for front in fronts if front]
 
     def calculate_non_dominated_rank(self, df, metric_states=None, objectives=None):
         """
@@ -679,4 +744,4 @@ class GeneticAlgorithm(Optimizer):
             self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
             self.logger.info(f"Population on Mutation: {len(sequences_to_add)}")
 
-        return child_sequences
+        return child_sequences, sequences_to_add

@@ -190,14 +190,16 @@ class MultiObjectiveOptimization:
 
         Returns True if the iteration is finished.
         """
+        finished = True
+        sequences = None
         # Check the sequences.pkl file
         if not os.path.exists(sequences_pkl):
             self.logger.error(f"File {sequences_pkl} not found")
-            raise ValueError(f"File {sequences_pkl} not found")
+            finished = False
         # Check if the sequences.pkl file is empty
         elif os.path.getsize(sequences_pkl) == 0:
             self.logger.error(f"File {sequences_pkl} is empty")
-            raise ValueError(f"File {sequences_pkl} is empty")
+            finished = False
         # Read the sequences.pkl file to check if has the correct number of sequences
         else:
             with open(sequences_pkl, "rb") as f:
@@ -211,11 +213,11 @@ class MultiObjectiveOptimization:
         # Check the data_frame.csv file
         if not os.path.exists(dataframe_pkl):
             self.logger.error(f"File {dataframe_pkl} not found")
-            raise ValueError(f"File {dataframe_pkl} not found")
+            finished = False
         # Check if the data_frame.csv file is empty
         elif os.path.getsize(dataframe_pkl) == 0:
             self.logger.error(f"File {dataframe_pkl} is empty")
-            raise ValueError(f"File {dataframe_pkl} is empty")
+            finished = False
         else:
             with open(dataframe_pkl, "rb") as f:
                 dataframe_iter = pickle.load(f)
@@ -226,7 +228,7 @@ class MultiObjectiveOptimization:
                         self.logger.error(
                             f"The number of sequences in the dataframe {iteration} doesn't reach the population size"
                         )
-        return True
+        return finished, sequences
 
     def check_previous_iterations(self):
         """
@@ -257,25 +259,32 @@ class MultiObjectiveOptimization:
                 + self.data_frame_file_name
             )
             # See if the iteration is finished
-            finished = self.check_Iter_finished(
+            finished, sequences = self.check_Iter_finished(
                 self.current_iteration, sequences_pkl, dataframe_pkl
             )
             if finished:
                 # Load the sequences
                 # TODO we are loading the sequences in two points, here and in check_Iter_finished
                 # TODO see if can be optimized to only one load.
-                with open(sequences_pkl, "rb") as f:
-                    sequences_iter = pickle.load(f)
                 for chain in self.chains:
-                    # self.sequences[chain] = {**self.sequences[chain], **sequences_iter[chain]}
-                    self.sequences[chain].update(sequences_iter[chain])
-                self.current_iteration += 1
+                    if not isinstance(self.sequences[chain], dict):
+                        self.sequences[chain] = {}  # Ensure it is a dictionary
 
+                    # Assuming sequences is a dictionary of dictionaries
+                    if chain in sequences:
+                        for seq in sequences[chain]:
+                            self.sequences[chain][seq.sequence] = seq
+                    else:
+                        self.sequences[chain] = sequences[chain]
+                self.current_iteration += 1
                 continue
+            else:
+                break
+
         dataframe_pkl = (
             self.folder_name
             + "/"
-            + str(self.current_iteration).zfill(3)
+            + str(self.current_iteration - 1).zfill(3)
             + "/"
             + self.data_frame_file_name
         )
@@ -332,17 +341,20 @@ class MultiObjectiveOptimization:
                 f"Error saving the data_frame from iteration {current_iteration}"
             )
 
-    def select_parents(self, evaluated_sequences_df, percent_of_parents=0.25):
+    def select_parents(self, evaluated_sequences_df, percent_of_parents=1):
         # sort by rank, keep the 25% of the sequences as parents
         sequences_ranked = evaluated_sequences_df.sort_values(by="Ranks")
-        top = sequences_ranked.head(int(len(sequences_ranked) * percent_of_parents))
-        top_list = [seq for seq in top["Sequence"].tolist()]
+        top_list_df = sequences_ranked.head(
+            int(self.population_size * percent_of_parents)
+        )
+        top_list_sequence = [seq for seq in top_list_df["Sequence"].tolist()]
 
-        return top_list
+        return top_list_sequence, top_list_df
 
     def setup_folders_iter(self, current_iteration):
-        if not os.path.exists(self.folder_name + "/" + str(current_iteration).zfill(3)):
-            os.mkdir(self.folder_name + "/" + str(current_iteration).zfill(3))
+        if os.path.exists(self.folder_name + "/" + str(current_iteration).zfill(3)):
+            shutil.rmtree(self.folder_name + "/" + str(current_iteration).zfill(3))
+        os.mkdir(self.folder_name + "/" + str(current_iteration).zfill(3))
 
     def save_info(self, seq):
         info = {
@@ -388,6 +400,7 @@ class MultiObjectiveOptimization:
 
         self.current_iteration = 0
         parents_sequences = {}
+        parents_sequences_df = {}
 
         # Get if the algorithm is finished, total_sequences, and the dataframe of the last iterations
         finished, evaluated_sequences_df = self.check_previous_iterations()
@@ -403,8 +416,9 @@ class MultiObjectiveOptimization:
             self.load_info()
 
         sequences_to_evaluate = {}
+        sequences_to_save = {}
 
-        for self.current_iteration in range(self.max_iteration):
+        while self.current_iteration < self.max_iteration:
             self.logger.info(f"***Starting iteration {self.current_iteration}***")
 
             if self.current_iteration == 0:
@@ -423,8 +437,8 @@ class MultiObjectiveOptimization:
                     self.logger.info("Initializing the first population")
                     # Create the initial population
                     # TODO the sequences must be Seq objects
-                    sequences_to_evaluate[chain] = self.optimizer.init_population(
-                        chain, seq_chains[chain]
+                    sequences_to_evaluate[chain], sequences_to_save[chain] = (
+                        self.optimizer.init_population(chain, seq_chains[chain])
                     )
 
                 # Save the info
@@ -434,14 +448,10 @@ class MultiObjectiveOptimization:
                 self.setup_folders_iter(self.current_iteration)
                 # Get the sequences from the optimizer
                 for chain in self.chains:
-                    # Select the parent sequences
-                    parents_sequences[chain] = self.select_parents(
-                        evaluated_sequences_df[chain]
-                    )
 
                     # Generate the child population
                     self.logger.info("Generating the child population")
-                    sequences_to_evaluate[chain] = (
+                    sequences_to_evaluate[chain], sequences_to_save[chain] = (
                         self.optimizer.generate_child_population(
                             parents_sequences[chain],
                             chain=chain,
@@ -453,8 +463,9 @@ class MultiObjectiveOptimization:
             self.logger.info("Calculating the metrics")
             # TODO add information to the data_frame, iteration, mutations, etc
             evaluated_sequences_df = {}
+            parents_sequences = {}
+            parents_sequences_df = {}
             for chain in self.chains:
-                parents_sequences = {}
                 # Get the sequences as a string format
                 sequences_to_evaluate_str = [
                     str(x) for x in sequences_to_evaluate[chain]
@@ -479,6 +490,18 @@ class MultiObjectiveOptimization:
 
                 # Evaluate the population and rank the individuals
                 self.logger.info("Evaluating and ranking the population")
+                # If the iteration is not the first, add the previous iteration sequences to the evaluation
+                if self.current_iteration != 0:
+                    with open(
+                        f"{self.folder_name}/{str(self.current_iteration - 1).zfill(3)}/{self.data_frame_file_name}",
+                        "rb",
+                    ) as f:
+                        metric_df_previ = pd.DataFrame(pickle.load(f)[chain])
+                    metric_df = pd.concat(
+                        [metric_df, metric_df_previ], ignore_index=True
+                    )
+                    metric_df.drop(columns=["Ranks"], inplace=True)
+
                 # Returns a dataframe with the sequences and the metrics, and a column with the rank
                 evaluated_sequences_df[chain] = self.optimizer.eval_population(
                     df=metric_df,
@@ -486,9 +509,14 @@ class MultiObjectiveOptimization:
                     objectives=metric_objectives,
                 )
 
+                # Select the parent sequences
+                parents_sequences[chain], parents_sequences_df[chain] = (
+                    self.select_parents(evaluated_sequences_df[chain])
+                )
+
             # Save the sequences and the data_frame
             self.save_iteration(
-                self.current_iteration, sequences_to_evaluate, evaluated_sequences_df
+                self.current_iteration, sequences_to_save, parents_sequences_df
             )
             self.current_iteration += 1
 

@@ -19,15 +19,18 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         distances_file = "tests/data/distances.json"
         cst_file = "tests/data/Felip9/FeLip9-PET-1_CA.cst"
         metrics = [
-            RosettaMetrics(
-                params_folder=params_folder,
-                cpus=cpus,
-                seed=1235,
-                native_pdb=native_pdb,
-                distances_file=distances_file,
-                cst_file=cst_file,
+            # RosettaMetrics(
+            #     params_folder=params_folder,
+            #     cpus=cpus,
+            #     seed=1235,
+            #     native_pdb=native_pdb,
+            #     ligand_chain="L",
+            #     # distances_file=distances_file,
+            #     # cst_file=cst_file,
+            # ),
+            ProteinMPNNMetrics(
+                chain="A", seed=1235, native_pdb=native_pdb, sampling_temp="0.1"
             ),
-            ProteinMPNNMetrics(chain="A", seed=1235, native_pdb=native_pdb),
         ]
         debug = True
         max_iteration = 50
@@ -35,9 +38,6 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         seed = 1235
 
         chains = ["A"]
-        # mutable_positions = {
-        #     "A": [34, 36, 55, 66, 70, 113, 120, 121, 122, 155, 156, 184]
-        # }
         with open(
             "tests/data/Felip9/design_library_glide.json",
             "r",
@@ -61,8 +61,6 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             population_size=population_size,
             offset=1,
         )
-        if os.path.exists("mood_job"):
-            shutil.rmtree("mood_job")
 
     def test_run(self):
         self.moo.run()

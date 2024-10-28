@@ -241,6 +241,7 @@ class Mpi_relax:
         distance_dict=None,
         native_pdb=None,
         cst_file=None,
+        ligand_chain=None,
         atom_pair_constraint_weight=1,
     ):
         # Initialize MPI
@@ -263,12 +264,13 @@ class Mpi_relax:
         # Initialize native pose
         native_pose = prs.pyrosetta.pose_from_pdb(native_pdb)
 
-        # Get the distances dictionary
-        for key, value in distances.items():
-            if len(value[0]) == 3:
-                natom1 = native_pose.pdb_info().pdb2pose(value[0][0], value[0][1])
-                natom2 = native_pose.pdb_info().pdb2pose(value[1][0], value[1][1])
-                distances[key] = [(natom1, value[0][2]), (natom2, value[1][2])]
+        if distance_dict is not None:
+            # Get the distances dictionary
+            for key, value in distances.items():
+                if len(value[0]) == 3:
+                    natom1 = native_pose.pdb_info().pdb2pose(value[0][0], value[0][1])
+                    natom2 = native_pose.pdb_info().pdb2pose(value[1][0], value[1][1])
+                    distances[key] = [(natom1, value[0][2]), (natom2, value[1][2])]
 
         # Initialize score function and relax mover
         sfxn = prs.rosetta.core.scoring.ScoreFunctionFactory.create_score_function(
@@ -281,7 +283,7 @@ class Mpi_relax:
         )
 
         # Apply constraints to the energy function
-        if cst_file is not None:
+        if cst_file != "None":
             sfxn.set_weight(rosetta.core.scoring.ScoreType.res_type_constraint, 1)
             # Define catalytic constraints
             set_constraints = rosetta.protocols.constraint_movers.ConstraintSetMover()
@@ -340,12 +342,15 @@ class Mpi_relax:
                 fastrelax_mover=fastrelax_mover,
                 sfxn=sfxn_scorer,
             )
-            # Get the apo score
-            apo_score = self.calculate_Apo_Score(test_pose, sfxn_scorer, "L")
-            # Get the binding score
-            interface_score = self.calculate_Interface_Score(
-                test_pose, sfxn_scorer, "L"
-            )
+            if ligand_chain != "None":
+                # Get the apo score
+                apo_score = self.calculate_Apo_Score(
+                    test_pose, sfxn_scorer, ligand_chain
+                )
+                # Get the binding score
+                interface_score = self.calculate_Interface_Score(
+                    test_pose, sfxn_scorer, ligand_chain
+                )
             # Apply the hydrophobic filter and get the score
             hydro_filter.apply(test_pose)
             hydrophobic_score = hydro_filter.compute(test_pose)
@@ -354,26 +359,31 @@ class Mpi_relax:
                 key="salt_bridge", this_pose=test_pose
             )
             # Calculate the distances
-            res_distance = distance_dict.copy()
-            for key, value in distance_dict.items():
-                res_distance[key] = self.distance(test_pose, value[0], value[1])
+            if distance_dict is not None:
+                res_distance = distance_dict.copy()
+                for key, value in distance_dict.items():
+                    res_distance[key] = self.distance(test_pose, value[0], value[1])
             # n_salt_bidges = self.get_salt_bridges(f"{job_output}_R{rank}_I{i}_0.pdb", "pdb")
 
             # Gather results
             relaxed_energies.append((i, mean_energy))
-            interface_scores.append((i, interface_score))
-            apo_scores.append((i, apo_score))
+            if ligand_chain is not None:
+                interface_scores.append((i, interface_score))
+                apo_scores.append((i, apo_score))
             hydrophobic_scores.append((i, hydrophobic_score))
             n_salt_bridges_iter.append((i, n_salt_bridges))
-            distances_res.append((i, res_distance))
+            if distance_dict is not None:
+                distances_res.append((i, res_distance))
 
         # Gather results from all processors
         all_relaxed_energies = comm.gather(relaxed_energies, root=0)
-        all_interface_scores = comm.gather(interface_scores, root=0)
-        all_apo_scores = comm.gather(apo_scores, root=0)
+        if ligand_chain != "None":
+            all_interface_scores = comm.gather(interface_scores, root=0)
+            all_apo_scores = comm.gather(apo_scores, root=0)
         all_hydrophobic_scores = comm.gather(hydrophobic_scores, root=0)
         all_salt_bridges = comm.gather(n_salt_bridges_iter, root=0)
-        all_distances_res = comm.gather(distances_res, root=0)
+        if distance_dict is not None:
+            all_distances_res = comm.gather(distances_res, root=0)
 
         # Delete the pdbs
         # Construct the pattern to match the files
@@ -407,30 +417,38 @@ class Mpi_relax:
             df_relaxed_energies = flatten_and_merge(
                 all_relaxed_energies, ["Index", "Relax_Energy"]
             )
-            df_interface_scores = flatten_and_merge(
-                all_interface_scores, ["Index", "Interface_Score"]
-            )
-            df_apo_scores = flatten_and_merge(all_apo_scores, ["Index", "Apo_Score"])
+            if ligand_chain != "None":
+                df_interface_scores = flatten_and_merge(
+                    all_interface_scores, ["Index", "Interface_Score"]
+                )
+                df_apo_scores = flatten_and_merge(
+                    all_apo_scores, ["Index", "Apo_Score"]
+                )
             df_hydrophobic_scores = flatten_and_merge(
                 all_hydrophobic_scores, ["Index", "Hydrophobic_Score"]
             )
             df_salt_bridges = flatten_and_merge(
                 all_salt_bridges, ["Index", "Salt_Bridges"]
             )
-            flattened_dist = [item for sublist in all_distances_res for item in sublist]
-            df_distances = pd.DataFrame(
-                [item[1] for item in flattened_dist],
-                index=[item[0] for item in flattened_dist],
-            )
-            df_distances = df_distances.rename(columns=lambda x: "dist_" + x)
+            if distance_dict is not None:
+                flattened_dist = [
+                    item for sublist in all_distances_res for item in sublist
+                ]
+                df_distances = pd.DataFrame(
+                    [item[1] for item in flattened_dist],
+                    index=[item[0] for item in flattened_dist],
+                )
+                df_distances = df_distances.rename(columns=lambda x: "dist_" + x)
 
             # Create the final df with all the values
             df = df_relaxed_energies
-            df = df.merge(df_interface_scores, on="Index")
-            df = df.merge(df_apo_scores, on="Index")
+            if ligand_chain is not None:
+                df = df.merge(df_interface_scores, on="Index")
+                df = df.merge(df_apo_scores, on="Index")
             df = df.merge(df_hydrophobic_scores, on="Index")
             df = df.merge(df_salt_bridges, on="Index")
-            df = df.merge(df_distances, left_on="Index", right_index=True)
+            if distance_dict is not None:
+                df = df.merge(df_distances, left_on="Index", right_index=True)
 
             df.to_csv(f"{output_folder}/rosetta_scores.csv", index=False)
 
@@ -463,16 +481,22 @@ def parse_arguments():
     )
     parser.add_argument(
         "--distances",
+        default=None,
         type=str,
-        default="distance.pkl",
         required=True,
         help="File containing distances between residues",
     )
     parser.add_argument(
         "--cst_file",
-        type=str,
         default=None,
+        type=str,
         help="File containing constraints for the job",
+    )
+    parser.add_argument(
+        "--ligand_chain",
+        default=None,
+        type=str,
+        help="Indicate the chain of the ligand",
     )
 
     return parser.parse_args()
@@ -480,6 +504,7 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
+    distances = None
 
     if args.params_folder != None:
         patches = [
@@ -519,12 +544,13 @@ if __name__ == "__main__":
     if not os.path.exists(args.native_pdb):
         raise ValueError(f"The native pdb file {args.native_pdb} does not exist")
 
-    if args.distances.endswith(".pkl"):
-        with open(args.distances, "rb") as file:
-            distances = pickle.load(file)
-    elif args.distances.endswith(".json"):
-        with open(args.distances, "r") as file:
-            distances = json.load(file)
+    if args.distances is not None:
+        if args.distances.endswith(".pkl"):
+            with open(args.distances, "rb") as file:
+                distances = pickle.load(file)
+        elif args.distances.endswith(".json"):
+            with open(args.distances, "r") as file:
+                distances = json.load(file)
 
     if not os.path.exists(args.sequences_file):
         raise ValueError(f"The sequence file {args.sequences_file} does not exists")
@@ -535,4 +561,5 @@ if __name__ == "__main__":
         native_pdb=args.native_pdb,
         distance_dict=distances,
         cst_file=args.cst_file,
+        ligand_chain=args.ligand_chain,
     )
