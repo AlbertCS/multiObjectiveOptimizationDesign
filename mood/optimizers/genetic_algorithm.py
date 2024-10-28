@@ -18,7 +18,6 @@ class GeneticAlgorithm(Optimizer):
         seed: int = 12345,
         debug: bool = False,
         data: Any = None,
-        mutation_seq_percent: float = 0.5,
         # mutable_positions: List[int] = [],
         mutable_aa: Dict[int, Any] = {},
         eval_mutations: bool = False,  # Rosetta minimization mover to decide if the mutations are accepted
@@ -35,8 +34,6 @@ class GeneticAlgorithm(Optimizer):
             optimizerType=OptimizersType.GA,
         )
 
-        # Number of mutated sequences to generate at the beginning
-        self.mutation_seq_percent = mutation_seq_percent
         self.rng = random.Random(seed)
         # self.mutable_positions = mutable_positions
         self.mutable_aa = mutable_aa
@@ -270,14 +267,6 @@ class GeneticAlgorithm(Optimizer):
             if n_missing == 0:
                 self.logger.info("Population already at the desired size")
             else:
-                if index > self.population_size * self.mutation_seq_percent:
-                    self.logger.info(
-                        f"Population already at {self.mutation_seq_percent * 100}%, no mutations will occur"
-                    )
-                else:
-                    self.logger.info(
-                        f"Populating {self.mutation_seq_percent * 100}% of the {self.population_size} total population"
-                    )
                 # Adding sequences by mutation until the desired percentage is reached
                 while len(child_sequences) < self.population_size:
                     # Select a sequence to mutate, if we choose the native sequence, we will have a new sequence with only one mutation
