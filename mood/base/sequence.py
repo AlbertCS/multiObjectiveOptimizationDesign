@@ -196,3 +196,9 @@ class Sequence:
             for m in self.mutations:
                 label += "\t" + m[0] + str(m[1]) + m[2] + "\n"
         return label
+
+    def save(self):
+        """
+        Save the sequence object to a file.
+        """
+        # save the sequence object as a dict to a file

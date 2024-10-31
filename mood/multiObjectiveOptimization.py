@@ -102,6 +102,7 @@ class MultiObjectiveOptimization:
         mutable_aa=None,
         population_size=100,
         offset=None,
+        starting_sequences=None,
     ) -> None:
 
         # Define the logger
@@ -129,6 +130,13 @@ class MultiObjectiveOptimization:
         self.sequences = {chain: {} for chain in self.chains}
         self.sequences_file_name = "sequences.pkl"
         self.data_frame_file_name = "data_frame.pkl"
+
+        # Load initial sequences if necessary
+        if starting_sequences is None:
+            self.starting_sequences = None
+        else:
+            with open(starting_sequences, "rb") as f:
+                self.starting_sequences = pickle.load(f)
 
         if offset is None:
             self.mutable_aa = mutable_aa
@@ -167,7 +175,7 @@ class MultiObjectiveOptimization:
         parser = PDBParser()
         structure = parser.get_structure(structure_id, pdb_file)
         chains = {
-            chain.id: seq1("".join(residue.resname for residue in chain))
+            chain.id: [seq1("".join(residue.resname for residue in chain))]
             for chain in structure.get_chains()
         }
         return chains
@@ -306,6 +314,7 @@ class MultiObjectiveOptimization:
             return True, data_frame
 
     def save_iteration(self, current_iteration, sequences, dataframe):
+        # TODO save the sequences correctly as the sequences.pkl file does not containt the initial sequences
         try:
             with open(
                 self.folder_name
@@ -432,8 +441,15 @@ class MultiObjectiveOptimization:
                 # Save natives sequences
                 self.native_sequence = seq_chains
                 self.optimizer.native = self.native_sequence
+
                 # For each chain, initialize the population
                 for chain in self.chains:
+                    if self.starting_sequences is not None:
+                        self.logger.info("Using the starting sequences")
+                        # Adding starting sequences to the native
+                        # TODO for now we are using the starting sequences as the initial population, the PDB not included
+                        seq_chains[chain] = self.starting_sequences[chain]
+
                     self.logger.info("Initializing the first population")
                     # Create the initial population
                     # TODO the sequences must be Seq objects

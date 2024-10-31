@@ -266,6 +266,14 @@ class GeneticAlgorithm(Optimizer):
             seq_index = self.data.nsequences(chain)
             if n_missing == 0:
                 self.logger.info("Population already at the desired size")
+            elif n_missing < 0:
+                self.logger.error(
+                    f"The initial sequences are more than the population size: {len(child_sequences)}\n Using only the first {self.population_size} sequences"
+                )
+                self.logger.error(
+                    f"Using only the first {self.population_size} sequences"
+                )
+                child_sequences = child_sequences[: self.population_size]
             else:
                 # Adding sequences by mutation until the desired percentage is reached
                 while len(child_sequences) < self.population_size:
