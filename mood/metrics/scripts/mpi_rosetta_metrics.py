@@ -367,7 +367,8 @@ class Mpi_relax:
 
             # Gather results
             relaxed_energies.append((i, mean_energy))
-            if ligand_chain is not None:
+            if ligand_chain != "None":
+                print("ligand_chain is not None in append")
                 interface_scores.append((i, interface_score))
                 apo_scores.append((i, apo_score))
             hydrophobic_scores.append((i, hydrophobic_score))
@@ -442,7 +443,7 @@ class Mpi_relax:
 
             # Create the final df with all the values
             df = df_relaxed_energies
-            if ligand_chain is not None:
+            if ligand_chain != "None":
                 df = df.merge(df_interface_scores, on="Index")
                 df = df.merge(df_apo_scores, on="Index")
             df = df.merge(df_hydrophobic_scores, on="Index")
