@@ -25,6 +25,7 @@ class GeneticAlgorithm(Optimizer):
         crossover_iterations=1,
         mutation_iterations=1,
         max_mutation_per_iteration=1,
+        min_mutation_per_iteration=1,
     ) -> None:
         super().__init__(
             population_size=population_size,
@@ -46,6 +47,7 @@ class GeneticAlgorithm(Optimizer):
         self.mutation_iterations = mutation_iterations
         self.cycle_length = self.crossover_iterations + self.mutation_iterations
         self.max_mutation_per_iteration = max_mutation_per_iteration
+        self.min_mutation_per_iteration = min_mutation_per_iteration
 
         self.eval_mutations = eval_mutations
         if eval_mutations:
@@ -225,7 +227,9 @@ class GeneticAlgorithm(Optimizer):
 
         return final_energy_starting_pose - final_energy_mutated_pose
 
-    def init_population(self, chain, sequences_initial, max_attempts=1000):
+    def init_population(
+        self, chain, sequences_initial, mutations_probabilities, max_attempts=1000
+    ):
         self.logger.info("Initializing the population")
         # Initial checks
         if sequences_initial is None:
@@ -284,7 +288,9 @@ class GeneticAlgorithm(Optimizer):
                     mutated_sequence, mut = self.generate_mutation_sequence(
                         chain=chain,
                         sequence_to_mutate=sequence_to_start_from,
-                        max_mutations_recomb=self.max_mutation_per_iteration,
+                        min_mutations=self.min_mutation_per_iteration,
+                        max_mutations=self.max_mutation_per_iteration,
+                        mutations_probabilities=mutations_probabilities,
                     )
                     # TODO may need to adapt to a more than one mutation per iteration
                     # Evaluate the mutation with rosetta
@@ -296,9 +302,7 @@ class GeneticAlgorithm(Optimizer):
                             mutated_sequence=mutated_sequence,
                             cst_file=self.eval_mutations_params["cst_file"],
                         )
-                        if abs(dEnergy) < abs(
-                            self.eval_mutations_params["min_energy_threshold"]
-                        ):
+                        if dEnergy < self.eval_mutations_params["min_energy_threshold"]:
                             continue
                         self.logger.debug(f"Mutation energy: {dEnergy} accepted")
                     # Add the new sequence to the data object and iter_sequences
@@ -554,21 +558,33 @@ class GeneticAlgorithm(Optimizer):
     # TODO implement the following sort: https://github.com/smkalami/nsga2-in-python/blob/main/nsga2.py
 
     def generate_mutation_sequence(
-        self, chain, sequence_to_mutate, max_mutations_recomb=1
+        self,
+        chain,
+        sequence_to_mutate,
+        min_mutations=1,
+        max_mutations=1,
+        mutations_probabilities=None,
     ):
         sequence_to_mutate_list = list(sequence_to_mutate)
         mut = []
         if self.mutable_aa == {}:
             raise ValueError("No mutable amino acids provided")
-        for _ in range(self.rng.choice(list(range(1, max_mutations_recomb + 1)))):
+        for _ in range(self.rng.choice(list(range(min_mutations, max_mutations + 1)))):
             position = self.rng.choice(list(self.mutable_aa[chain].keys()))
-            new_aa = self.rng.choice(self.mutable_aa[chain][position])
+            if mutations_probabilities is None:
+                new_aa = self.rng.choice(self.mutable_aa[chain][position])
+            else:
+                new_aa = self.rng.choices(
+                    self.mutable_aa[chain][position],
+                    mutations_probabilities[chain][str(position)],
+                    k=1,
+                )[0]
             sequence_to_mutate_list[position] = new_aa
             mut.append((sequence_to_mutate[position], position, new_aa))
 
         return "".join(sequence_to_mutate_list), mut
 
-    def mutation_on_crossover(self, parent_sequences, chain):
+    def mutation_on_crossover(self, parent_sequences, chain, mutations_probabilities):
         child_sequences = []
         sequences_to_add = []
         attemps = 0
@@ -578,7 +594,9 @@ class GeneticAlgorithm(Optimizer):
             child_sequence, mut = self.generate_mutation_sequence(
                 chain=chain,
                 sequence_to_mutate=sequence_to_start_from,
-                max_mutations_recomb=self.max_mutation_per_iteration,
+                min_mutations=self.min_mutation_per_iteration,
+                max_mutations_=self.max_mutation_per_iteration,
+                mutations_probabilities=mutations_probabilities,
             )
             # TODO may need to adapt to a more than one mutation per iteration
             # Evaluate the mutation with rosetta
@@ -590,9 +608,7 @@ class GeneticAlgorithm(Optimizer):
                     mutated_sequence=child_sequence,
                     cst_file=self.eval_mutations_params["cst_file"],
                 )
-                if abs(dEnergy) < abs(
-                    self.eval_mutations_params["min_energy_threshold"]
-                ):
+                if dEnergy < self.eval_mutations_params["min_energy_threshold"]:
                     continue
             # If the sequence does not exist, add it to the list of sequences to add
             if (
@@ -626,6 +642,7 @@ class GeneticAlgorithm(Optimizer):
         parent_sequences,
         chain=None,
         current_iteration=None,
+        mutations_probabilities=None,
     ):
         child_sequences = []
         sequences_to_add = []
@@ -696,7 +713,9 @@ class GeneticAlgorithm(Optimizer):
                 child_sequence, mut = self.generate_mutation_sequence(
                     chain=chain,
                     sequence_to_mutate=sequence_to_start_from,
-                    max_mutations_recomb=self.max_mutation_per_iteration,
+                    min_mutations=self.min_mutation_per_iteration,
+                    max_mutations=self.max_mutation_per_iteration,
+                    mutations_probabilities=mutations_probabilities,
                 )
                 # TODO may need to adapt to a more than one mutation per iteration
                 # Evaluate the mutation with rosetta
@@ -708,9 +727,7 @@ class GeneticAlgorithm(Optimizer):
                         mutated_sequence=child_sequence,
                         cst_file=self.eval_mutations_params["cst_file"],
                     )
-                    if abs(dEnergy) < abs(
-                        self.eval_mutations_params["min_energy_threshold"]
-                    ):
+                    if dEnergy < self.eval_mutations_params["min_energy_threshold"]:
                         continue
                     self.logger.debug(f"Mutation energy: {dEnergy} accepted")
                 # If the sequence does not exist, add it to the list of sequences to add
@@ -740,5 +757,78 @@ class GeneticAlgorithm(Optimizer):
                 attemps += 1
             self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
             self.logger.info(f"Population on Mutation: {len(sequences_to_add)}")
+
+        return child_sequences, sequences_to_add
+
+    def generate_child_population_with_recombination(
+        self,
+        parent_sequences,
+        chain=None,
+        current_iteration=None,
+        mutations_probabilities=None,
+    ):
+        child_sequences = []
+        sequences_to_add = []
+
+        self.logger.info(f"Iteration {current_iteration} - Crossover")
+        general_attempt = 0
+        same_parents_attempts = 0
+        while len(child_sequences) < self.population_size:
+            seq_index = self.data.nsequences(chain)
+            # Select the parents sequences
+            sequence1 = random.choice(parent_sequences)
+            sequence2 = random.choice(parent_sequences)
+            # Check that the sequences are different
+            while sequence1 == sequence2:
+                sequence2 = random.choice(parent_sequences)
+            while same_parents_attempts < 10:
+                child_sequence = self.generate_crossover_sequence(
+                    sequence1=sequence1, sequence2=sequence2, chain=chain
+                )
+                # See if a 50% of probability to mutate is too much
+                child_sequence = self.generate_mutation_sequence(
+                    chain=chain,
+                    sequence_to_mutate=child_sequence,
+                    min_mutations=0,
+                    max_mutations=self.max_mutation_per_iteration,
+                    mutations_probabilities=mutations_probabilities,
+                )
+                # If the sequence does not exist, add it to the list of sequences to add
+                if (
+                    not self.data.sequence_exists(chain, child_sequence)
+                    and child_sequence not in child_sequences
+                ):
+                    child_sequences.append(child_sequence)
+                    sequences_to_add.append(
+                        Sequence(
+                            sequence=child_sequence,
+                            chain=chain,
+                            index=seq_index,
+                            active=True,
+                            mutations=None,
+                            native=self.native,
+                        ),
+                    )
+                    seq_index += 1
+                    general_attempt = 0
+                    same_parents_attempts = 0
+                    break
+
+                same_parents_attempts += 1
+
+            if general_attempt > 100:
+                # If the number of attempts to generate a new sequence is exceeded, switch to mutation
+                self.logger.info(
+                    f"Exceeded the number of attempts to generate a new sequence, switching to mutation"
+                )
+                sequences_to_add = self.mutation_on_crossover(parent_sequences, chain)
+                break
+
+            general_attempt += 1
+            same_parents_attempts = 0
+
+        # Add sequences tot the data object
+        self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
+        self.logger.info(f"Population on crossover: {len(sequences_to_add)}")
 
         return child_sequences, sequences_to_add

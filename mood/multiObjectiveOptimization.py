@@ -100,9 +100,12 @@ class MultiObjectiveOptimization:
         mutation_rate=None,
         folder_name="mood_job",
         mutable_aa=None,
+        mutations_probabilities=None,
         population_size=100,
         offset=None,
         starting_sequences=None,
+        recombination_with_mutation=False,
+        eval_mutations_params=None,
     ) -> None:
 
         # Define the logger
@@ -145,6 +148,10 @@ class MultiObjectiveOptimization:
                 chain: {int(pos) - offset: aa for pos, aa in positions.items()}
                 for chain, positions in mutable_aa.items()
             }
+
+        self.mutations_probabilities = mutations_probabilities
+        self.recombination_with_mutation = recombination_with_mutation
+
         if isinstance(chains, str):
             self.chains = [chains]
         elif isinstance(chains, list):
@@ -162,12 +169,19 @@ class MultiObjectiveOptimization:
             )
         else:
             if optimizer == "genetic_algorithm":
+                if recombination_with_mutation is True or eval_mutations_params is None:
+                    eval_mutations = False
+                else:
+                    eval_mutations = True
+
                 self.optimizer = GeneticAlgorithm(
                     population_size=population_size,
                     seed=seed,
                     debug=debug,
                     data=data,
                     mutable_aa=self.mutable_aa,
+                    eval_mutations=eval_mutations,
+                    eval_mutations_params=eval_mutations_params,
                 )
 
     def _get_seq_from_pdb(self, structure_id="initial_structure", pdb_file=None):
@@ -454,7 +468,11 @@ class MultiObjectiveOptimization:
                     # Create the initial population
                     # TODO the sequences must be Seq objects
                     sequences_to_evaluate[chain], sequences_to_save[chain] = (
-                        self.optimizer.init_population(chain, seq_chains[chain])
+                        self.optimizer.init_population(
+                            chain=chain,
+                            sequences_initial=seq_chains[chain],
+                            mutations_probabilities=self.mutations_probabilities,
+                        )
                     )
 
                 # Save the info
@@ -472,6 +490,7 @@ class MultiObjectiveOptimization:
                             parents_sequences[chain],
                             chain=chain,
                             current_iteration=self.current_iteration,
+                            mutations_probabilities=self.mutations_probabilities,
                         )
                     )
 
