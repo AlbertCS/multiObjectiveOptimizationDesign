@@ -18,7 +18,8 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         native_pdb = "tests/data/Felip9/FeLip9-PET-1.pdb"
         distances_file = "tests/data/distances.json"
         cst_file = "tests/data/Felip9/FeLip9-PET-1_CA.cst"
-        starting_sequences = "tests/data/Felip9/ProtNPMM_seqs.fasta"
+
+        # starting_sequences = "tests/data/Felip9/ProtNPMM_native_small.fasta"
         metrics = [
             # RosettaMetrics(
             #     params_folder=params_folder,
@@ -34,17 +35,29 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             ),
         ]
         debug = True
-        max_iteration = 300
-        population_size = 100
+        max_iteration = 50
+        population_size = 20
         seed = 1235
-
+        eval_mutations_params = {
+            "cst_file": cst_file,
+            "min_energy_threshold": 0,
+            "seed": seed,
+            "params_folder": params_folder,
+            "native_pdb": native_pdb,
+        }
         chains = ["A"]
         with open(
             "tests/data/Felip9/all_mutable_aa.json",
             "r",
         ) as f:
             design = json.load(f)
+        with open(
+            "tests/data/Felip9/mutation_probs.json",
+            "r",
+        ) as f:
+            mutations_probs = json.load(f)
         mutable_aa = {"A": design}
+        mutations_probabilities = {"A": mutations_probs}
         folder_name = "mood_job"
         if os.path.exists(folder_name):
             shutil.rmtree(folder_name)
@@ -61,7 +74,10 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             seed=seed,
             population_size=population_size,
             offset=1,
-            starting_sequences=starting_sequences,
+            eval_mutations_params=eval_mutations_params,
+            # starting_sequences=starting_sequences,
+            mutations_probabilities=mutations_probabilities,
+            recombination_with_mutation=True,
         )
 
     def test_run(self):
