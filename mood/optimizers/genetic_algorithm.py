@@ -766,6 +766,7 @@ class GeneticAlgorithm(Optimizer):
         chain=None,
         current_iteration=None,
         mutations_probabilities=None,
+        mutation_rate=0.4,
     ):
         child_sequences = []
         sequences_to_add = []
@@ -785,14 +786,15 @@ class GeneticAlgorithm(Optimizer):
                 child_sequence = self.generate_crossover_sequence(
                     sequence1=sequence1, sequence2=sequence2, chain=chain
                 )
-                # See if a 50% of probability to mutate is too much
-                child_sequence = self.generate_mutation_sequence(
-                    chain=chain,
-                    sequence_to_mutate=child_sequence,
-                    min_mutations=0,
-                    max_mutations=self.max_mutation_per_iteration,
-                    mutations_probabilities=mutations_probabilities,
-                )
+                if self.rng.random() < mutation_rate:
+                    # See if a 50% of probability to mutate is too much
+                    child_sequence = self.generate_mutation_sequence(
+                        chain=chain,
+                        sequence_to_mutate=child_sequence,
+                        min_mutations=self.min_mutation_per_iteration,
+                        max_mutations=self.max_mutation_per_iteration,
+                        mutations_probabilities=mutations_probabilities,
+                    )
                 # If the sequence does not exist, add it to the list of sequences to add
                 if (
                     not self.data.sequence_exists(chain, child_sequence)
