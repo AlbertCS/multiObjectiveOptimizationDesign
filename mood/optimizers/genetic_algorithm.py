@@ -53,11 +53,12 @@ class GeneticAlgorithm(Optimizer):
 
         self.eval_mutations = eval_mutations
         self.eval_mutations_params = eval_mutations_params
-        self.native_pdb = self.eval_mutations_params["native_pdb"]
 
     def init_pyrosetta(self):
 
         import pyrosetta as prs
+
+        self.native_pdb = self.eval_mutations_params["native_pdb"]
 
         if self.eval_mutations_params["params_folder"] != None:
             patches = [
