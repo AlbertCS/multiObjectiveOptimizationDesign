@@ -427,6 +427,10 @@ class MultiObjectiveOptimization:
 
         # Get if the algorithm is finished, total_sequences, and the dataframe of the last iterations
         finished, evaluated_sequences_df = self.check_previous_iterations()
+        parents_sequences = {
+            chain: df["Sequence"].tolist()
+            for chain, df in evaluated_sequences_df.items()
+        }
         if finished:
             self.logger.info(
                 "Genetic algorithm has finished running. Increase the number of iterations to continue"
