@@ -1,9 +1,10 @@
+import concurrent.futures
+import multiprocessing
 import os
 import random
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 import numpy as np
-from icecream import ic
 
 from mood.base.log import Logger
 from mood.base.sequence import Sequence
@@ -35,6 +36,7 @@ class GeneticAlgorithm(Optimizer):
             optimizerType=OptimizersType.GA,
         )
 
+        multiprocessing.set_start_method("spawn")
         self.rng = random.Random(seed)
         # self.mutable_positions = mutable_positions
         self.mutable_aa = mutable_aa
@@ -50,37 +52,37 @@ class GeneticAlgorithm(Optimizer):
         self.min_mutation_per_iteration = min_mutation_per_iteration
 
         self.eval_mutations = eval_mutations
-        if eval_mutations:
-            self.eval_mutations_params = eval_mutations_params
-            self.native_pdb = eval_mutations_params["native_pdb"]
-            eval_mutations_params["cst_file"]
+        self.eval_mutations_params = eval_mutations_params
+        self.native_pdb = self.eval_mutations_params["native_pdb"]
 
-            import pyrosetta as prs
+    def init_pyrosetta(self):
 
-            if eval_mutations_params["params_folder"] != None:
-                patches = [
-                    eval_mutations_params["params_folder"] + "/" + x
-                    for x in os.listdir(eval_mutations_params["params_folder"])
-                    if x.endswith(".txt")
-                ]
-                params = [
-                    eval_mutations_params["params_folder"] + "/" + x
-                    for x in os.listdir(eval_mutations_params["params_folder"])
-                    if x.endswith(".params")
-                ]
-                if patches == []:
-                    patches = None
-                if params == []:
-                    raise ValueError(
-                        f"Params files were not found in the given folder: {eval_mutations_params["params_folder"]}!"
-                    )
-            params = " ".join(params)
-            patches = " ".join(patches)
+        import pyrosetta as prs
 
-            options = f"-relax:default_repeats 1 -constant_seed true -jran {eval_mutations_params["seed"]}"
-            options += f" -extra_res_fa {params} -extra_patch_fa {patches}"
+        if self.eval_mutations_params["params_folder"] != None:
+            patches = [
+                self.eval_mutations_params["params_folder"] + "/" + x
+                for x in os.listdir(self.eval_mutations_params["params_folder"])
+                if x.endswith(".txt")
+            ]
+            params = [
+                self.eval_mutations_params["params_folder"] + "/" + x
+                for x in os.listdir(self.eval_mutations_params["params_folder"])
+                if x.endswith(".params")
+            ]
+            if patches == []:
+                patches = None
+            if params == []:
+                raise ValueError(
+                    f"Params files were not found in the given folder: {self.eval_mutations_params["params_folder"]}!"
+                )
+        params = " ".join(params)
+        patches = " ".join(patches)
 
-            prs.pyrosetta.init(options=options)
+        options = f"-relax:default_repeats 1 -constant_seed true -jran {self.eval_mutations_params["seed"]}"
+        options += f" -extra_res_fa {params} -extra_patch_fa {patches}"
+
+        prs.pyrosetta.init(options=options)
 
     def local_relax(
         self,
@@ -247,6 +249,9 @@ class GeneticAlgorithm(Optimizer):
             # Adding the initial sequences to the population
             i = self.data.nsequences(chain)
             sequences_to_add = []
+            mutations = []
+            starting_sequences = []
+            n_seqs_added = 0
             for sequence in sequences_initial:
                 sequences_to_add.append(
                     Sequence(
@@ -293,24 +298,14 @@ class GeneticAlgorithm(Optimizer):
                         mutations_probabilities=mutations_probabilities,
                     )
                     # TODO may need to adapt to a more than one mutation per iteration
-                    # Evaluate the mutation with rosetta
-                    if self.eval_mutations:
-                        dEnergy = self.local_relax(
-                            residues=[mut[0][1]],
-                            moving_chain=chain,
-                            starting_sequence=sequence_to_start_from,
-                            mutated_sequence=mutated_sequence,
-                            cst_file=self.eval_mutations_params["cst_file"],
-                        )
-                        if dEnergy < self.eval_mutations_params["min_energy_threshold"]:
-                            continue
-                        self.logger.debug(f"Mutation energy: {dEnergy} accepted")
                     # Add the new sequence to the data object and iter_sequences
                     if (
                         not self.data.sequence_exists(chain, mutated_sequence)
                         and mutated_sequence not in child_sequences
                     ):
                         child_sequences.append(mutated_sequence)
+                        mutations.append(mut)
+                        starting_sequences.append(sequence_to_start_from)
                         sequences_to_add.append(
                             Sequence(
                                 sequence=mutated_sequence,
@@ -323,10 +318,24 @@ class GeneticAlgorithm(Optimizer):
                         )
                         seq_index += 1
 
+                    if (
+                        len(child_sequences) == self.population_size
+                        and self.eval_mutations
+                    ):
+                        # Evaluate the mutation with rosetta
+                        self.logger.info("Evaluating the mutations")
+                        child_sequences, mutations, starting_sequences, n_seqs_added = (
+                            self.evaluate_mutations_on_sequence(
+                                mutated_sequences=child_sequences,
+                                mutations=mutations,
+                                chain=chain,
+                                starting_sequences=starting_sequences,
+                                n_seqs_added=n_seqs_added,
+                            )
+                        )
+                        print(f"Number of sequences added: {n_seqs_added}")
+
                 self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
-                # self.logger.debug(
-                #     f"Child population after mutation:\n{chr(10).join(child_sequences)}"
-                # )
                 self.logger.info(
                     f"Population initialized with mutation: {len(child_sequences)}"
                 )
@@ -637,6 +646,88 @@ class GeneticAlgorithm(Optimizer):
             attemps += 1
         return sequences_to_add
 
+    # Function to evaluate a single mutation
+    def evaluate_single_mutation(self, arg):
+        self.init_pyrosetta()
+        child_sequence, mut, sequence_to_start_from, chain = arg
+        dEnergy = self.local_relax(
+            residues=[mut[0][1]],
+            moving_chain=chain,
+            starting_sequence=sequence_to_start_from,
+            mutated_sequence=child_sequence,
+            cst_file=self.eval_mutations_params["cst_file"],
+        )
+
+        return child_sequence, mut, sequence_to_start_from, dEnergy
+
+    def evaluate_mutations_on_sequence(
+        self,
+        mutated_sequences,
+        mutations,
+        chain,
+        starting_sequences,
+        n_seqs_added=0,
+    ):
+        """
+        Evaluate mutations on a sequence and retain the ones that meet energy criteria.
+
+        Parameters:
+        - mutated_sequences: List of mutated sequences to evaluate.
+        - mutations: List of mutations applied to generate mutated_sequences.
+        - chain: The chain on which mutations are being evaluated.
+        - starting_sequences: List of sequences used as a basis for mutations.
+        - n_seqs_added: Number of sequences that were already evaluated.
+
+        Returns:
+        - better_sequences: List of sequences that pass the energy criteria.
+        - better_sequences_mut: Corresponding mutations for better_sequences.
+        - better_sequences_starting: Starting sequences for better_sequences.
+        - num_better_sequences: Number of sequences that passed the energy criteria.
+        """
+        # Initialize lists to store sequences that meet the criteria
+        better_sequences = []
+        better_sequences_mut = []
+        better_sequences_starting = []
+
+        # Prepare the arguments for parallel execution
+        args_list = list(
+            zip(
+                mutated_sequences[n_seqs_added:],
+                mutations[n_seqs_added:],
+                starting_sequences[n_seqs_added:],
+                [chain] * len(mutated_sequences[n_seqs_added:]),
+            )
+        )
+
+        # Determine the number of threads
+        num_threads = os.cpu_count() - 1
+
+        # Use ProcessPoolExecutor to parallelize the evaluation
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=num_threads
+        ) as executor:
+            results = list(executor.map(self.evaluate_single_mutation, args_list))
+
+        # Process the results
+        for child_sequence, mut, sequence_to_start_from, dEnergy in results:
+            # If the energy is below the threshold, skip this sequence
+            if dEnergy < self.eval_mutations_params["min_energy_threshold"]:
+                continue
+
+            # Store the sequences that meet the energy threshold
+            better_sequences.append(child_sequence)
+            better_sequences_mut.append(mut)
+            better_sequences_starting.append(sequence_to_start_from)
+            self.logger.debug(f"Mutation energy: {dEnergy} accepted")
+
+        # Return only the sequences that meet the criteria
+        return (
+            mutated_sequences[:n_seqs_added] + better_sequences,
+            mutations[:n_seqs_added] + better_sequences_mut,
+            starting_sequences[:n_seqs_added] + better_sequences_starting,
+            len(mutated_sequences[:n_seqs_added]) + len(better_sequences),
+        )
+
     def generate_child_population(
         self,
         parent_sequences,
@@ -646,6 +737,9 @@ class GeneticAlgorithm(Optimizer):
     ):
         child_sequences = []
         sequences_to_add = []
+        mutations = []
+        starting_sequences = []
+        n_seqs_added = 0
         cycle_pos = current_iteration % self.cycle_length
 
         if cycle_pos < self.crossover_iterations:
@@ -718,24 +812,14 @@ class GeneticAlgorithm(Optimizer):
                     mutations_probabilities=mutations_probabilities,
                 )
                 # TODO may need to adapt to a more than one mutation per iteration
-                # Evaluate the mutation with rosetta
-                if self.eval_mutations:
-                    dEnergy = self.local_relax(
-                        residues=[mut[0][1]],
-                        moving_chain=chain,
-                        starting_sequence=sequence_to_start_from,
-                        mutated_sequence=child_sequence,
-                        cst_file=self.eval_mutations_params["cst_file"],
-                    )
-                    if dEnergy < self.eval_mutations_params["min_energy_threshold"]:
-                        continue
-                    self.logger.debug(f"Mutation energy: {dEnergy} accepted")
                 # If the sequence does not exist, add it to the list of sequences to add
                 if (
                     not self.data.sequence_exists(chain, child_sequence)
                     and child_sequence not in child_sequences
                 ):
                     child_sequences.append(child_sequence)
+                    mutations.append(mut)
+                    starting_sequences.append(sequence_to_start_from)
                     sequences_to_add.append(
                         Sequence(
                             sequence=child_sequence,
@@ -755,6 +839,20 @@ class GeneticAlgorithm(Optimizer):
                         f"Exceeded the number of attempts to generate a new sequence"
                     )
                 attemps += 1
+                if len(child_sequences) == self.population_size and self.eval_mutations:
+                    # Evaluate the mutation with rosetta
+                    self.logger.info("Evaluating the mutations")
+                    child_sequences, mutations, starting_sequences, n_seqs_added = (
+                        self.evaluate_mutations_on_sequence(
+                            mutated_sequences=child_sequences,
+                            mutations=mutations,
+                            chain=chain,
+                            starting_sequences=starting_sequences,
+                            n_seqs_added=n_seqs_added,
+                        )
+                    )
+                    print(f"Number of sequences added: {n_seqs_added}")
+
             self.data.add_sequences(chain=chain, new_sequences=sequences_to_add)
             self.logger.info(f"Population on Mutation: {len(sequences_to_add)}")
 
@@ -766,6 +864,7 @@ class GeneticAlgorithm(Optimizer):
         chain=None,
         current_iteration=None,
         mutations_probabilities=None,
+        mutation_rate=0.4,
     ):
         child_sequences = []
         sequences_to_add = []
@@ -785,14 +884,15 @@ class GeneticAlgorithm(Optimizer):
                 child_sequence = self.generate_crossover_sequence(
                     sequence1=sequence1, sequence2=sequence2, chain=chain
                 )
-                # See if a 50% of probability to mutate is too much
-                child_sequence = self.generate_mutation_sequence(
-                    chain=chain,
-                    sequence_to_mutate=child_sequence,
-                    min_mutations=0,
-                    max_mutations=self.max_mutation_per_iteration,
-                    mutations_probabilities=mutations_probabilities,
-                )
+                if self.rng.random() < mutation_rate:
+                    # See if a 50% of probability to mutate is too much
+                    child_sequence = self.generate_mutation_sequence(
+                        chain=chain,
+                        sequence_to_mutate=child_sequence,
+                        min_mutations=self.min_mutation_per_iteration,
+                        max_mutations=self.max_mutation_per_iteration,
+                        mutations_probabilities=mutations_probabilities,
+                    )
                 # If the sequence does not exist, add it to the list of sequences to add
                 if (
                     not self.data.sequence_exists(chain, child_sequence)

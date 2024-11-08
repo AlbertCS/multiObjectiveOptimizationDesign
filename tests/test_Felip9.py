@@ -21,15 +21,15 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
 
         # starting_sequences = "tests/data/Felip9/ProtNPMM_native_small.fasta"
         metrics = [
-            # RosettaMetrics(
-            #     params_folder=params_folder,
-            #     cpus=cpus,
-            #     seed=1235,
-            #     native_pdb=native_pdb,
-            #     ligand_chain="L",
-            #     distances_file=distances_file,
-            #     cst_file=cst_file,
-            # ),
+            RosettaMetrics(
+                params_folder=params_folder,
+                cpus=cpus,
+                seed=1235,
+                native_pdb=native_pdb,
+                ligand_chain="L",
+                distances_file=distances_file,
+                cst_file=cst_file,
+            ),
             ProteinMPNNMetrics(
                 chain="A", seed=1235, native_pdb=native_pdb, sampling_temp="0.1"
             ),
@@ -59,8 +59,8 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         mutable_aa = {"A": design}
         mutations_probabilities = {"A": mutations_probs}
         folder_name = "mood_job"
-        if os.path.exists(folder_name):
-            shutil.rmtree(folder_name)
+        # if os.path.exists(folder_name):
+        #     shutil.rmtree(folder_name)
         self.moo = MultiObjectiveOptimization(
             optimizer=optimizer,
             metrics=metrics,
@@ -77,7 +77,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             eval_mutations_params=eval_mutations_params,
             # starting_sequences=starting_sequences,
             mutations_probabilities=mutations_probabilities,
-            recombination_with_mutation=True,
+            recombination_with_mutation=False,
         )
 
     def test_run(self):
