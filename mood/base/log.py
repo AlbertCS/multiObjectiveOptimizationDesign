@@ -26,7 +26,8 @@ class Logger(metaclass=SingletonType):
         # self.log.addHandler(stream_handler)
 
         # FileHandler for file output
-        file_handler = logging.FileHandler("mood.log", mode="w")
+        # file_handler = logging.FileHandler("mood.log", mode="w")
+        file_handler = logging.FileHandler("mood.log", mode="a")
         file_formatter = logging.Formatter(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             datefmt="%d-%m-%y %H:%M:%S",

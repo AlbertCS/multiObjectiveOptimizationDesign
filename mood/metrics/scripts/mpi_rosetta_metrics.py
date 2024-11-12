@@ -391,22 +391,22 @@ class Mpi_relax:
         pattern = f"{output_folder}/decoy_R{rank}_*.pdb"
 
         # Find all files matching the pattern
-        files_to_remove = glob.glob(pattern)
-        # Remove each file
-        for file_path in files_to_remove:
-            try:
-                os.remove(file_path)
-            except OSError as e:
-                print(f"Error removing file {file_path}: {e.strerror}")
+        # files_to_remove = glob.glob(pattern)
+        # # Remove each file
+        # for file_path in files_to_remove:
+        #     try:
+        #         os.remove(file_path)
+        #     except OSError as e:
+        #         print(f"Error removing file {file_path}: {e.strerror}")
 
         # Remove each file
-        # for i in range(start_index, end_index):
-        #     try:
-        #         os.remove(f"{output_folder}/decoy_R{rank}_I{i}_0.pdb")
-        #     except OSError as e:
-        #         print(
-        #             f"Error removing file {f"{output_folder}/decoy_R{rank}_I{i}_0.pdb"}: {e.strerror}"
-        #         )
+        for i in range(start_index, end_index):
+            try:
+                os.remove(f"{output_folder}/decoy_R{rank}_I{i}_0.pdb")
+            except OSError as e:
+                print(
+                    f"Error removing file {f"{output_folder}/decoy_R{rank}_I{i}_0.pdb"}: {e.strerror}"
+                )
 
         # If rank 0, process the gathered results
         if rank == 0:
