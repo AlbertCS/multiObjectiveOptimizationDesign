@@ -9,6 +9,7 @@ import os
 import pickle
 import random
 import shutil
+import time
 
 import pandas as pd
 from Bio.PDB.PDBParser import PDBParser
@@ -421,6 +422,8 @@ class MultiObjectiveOptimization:
         self.logger.info("\tSeed: " + str(self.seed))
         self.logger.info("------------------------------------------------")
 
+        start = time.time()
+
         self.current_iteration = 0
         parents_sequences = {}
         parents_sequences_df = {}
@@ -559,6 +562,10 @@ class MultiObjectiveOptimization:
             )
             self.current_iteration += 1
 
+        end = time.time()
+        self.logger.info(
+            f"Optimization process finished. Elapsed time: {end - start} seconds"
+        )
         self.logger.info("-------Finishing the optimization process-------")
 
 

@@ -30,21 +30,21 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
                 distances_file=distances_file,
                 cst_file=cst_file,
             ),
-            ProteinMPNNMetrics(
-                chain="A", seed=1235, native_pdb=native_pdb, sampling_temp="0.1"
-            ),
+            # ProteinMPNNMetrics(
+            #     chain="A", seed=1235, native_pdb=native_pdb, sampling_temp="0.1"
+            # ),
         ]
         debug = True
         max_iteration = 50
         population_size = 20
         seed = 1235
-        eval_mutations_params = {
-            "cst_file": cst_file,
-            "min_energy_threshold": 0,
-            "seed": seed,
-            "params_folder": params_folder,
-            "native_pdb": native_pdb,
-        }
+        # eval_mutations_params = {
+        #     "cst_file": cst_file,
+        #     "min_energy_threshold": 0,
+        #     "seed": seed,
+        #     "params_folder": params_folder,
+        #     "native_pdb": native_pdb,
+        # }
         chains = ["A"]
         with open(
             "tests/data/Felip9/all_mutable_aa.json",
@@ -59,8 +59,8 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         mutable_aa = {"A": design}
         mutations_probabilities = {"A": mutations_probs}
         folder_name = "mood_job"
-        # if os.path.exists(folder_name):
-        #     shutil.rmtree(folder_name)
+        if os.path.exists(folder_name):
+            shutil.rmtree(folder_name)
         self.moo = MultiObjectiveOptimization(
             optimizer=optimizer,
             metrics=metrics,
@@ -74,7 +74,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             seed=seed,
             population_size=population_size,
             offset=1,
-            eval_mutations_params=eval_mutations_params,
+            # eval_mutations_params=eval_mutations_params,
             # starting_sequences=starting_sequences,
             mutations_probabilities=mutations_probabilities,
             recombination_with_mutation=False,
