@@ -142,9 +142,10 @@ class RosettaMetrics(Metric):
             raise Exception(f"An error occurred while running the Rosetta metrics: {e}")
 
         # Delete the pdb files
-        
-        
-        
+        for file in os.listdir(output_folder):
+            if file.endswith(".pdb"):
+                os.remove(os.path.join(output_folder, file))
+
         if not os.path.exists(f"{output_folder}/rosetta_scores.csv"):
             raise ValueError("The Rosetta metrics did not run successfully")
         else:
