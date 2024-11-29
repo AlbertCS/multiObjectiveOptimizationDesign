@@ -45,7 +45,7 @@ class RosettaMetrics(Metric):
     @property
     def objectives(self):
         return self._objectives
-    
+
     @objectives.setter
     def objectives(self, value):
         self._objectives = value
@@ -134,9 +134,17 @@ class RosettaMetrics(Metric):
             stdout, stderr = proc.communicate()
             print("Output:", stdout.decode())
             print("Error:", stderr.decode())
+            with open(f"{output_folder}/rosetta.out", "w") as f:
+                f.write(stdout.decode())
+            with open(f"{output_folder}/rosetta.out", "w") as f:
+                f.write(stdout.decode())
         except Exception as e:
             raise Exception(f"An error occurred while running the Rosetta metrics: {e}")
 
+        # Delete the pdb files
+        
+        
+        
         if not os.path.exists(f"{output_folder}/rosetta_scores.csv"):
             raise ValueError("The Rosetta metrics did not run successfully")
         else:
