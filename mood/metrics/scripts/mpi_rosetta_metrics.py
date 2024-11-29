@@ -403,13 +403,13 @@ class Mpi_relax:
         #         print(f"Error removing file {file_path}: {e.strerror}")
 
         # Remove each file
-        for i in range(start_index, end_index):
-            try:
-                os.remove(f"{output_folder}/decoy_R{rank}_I{i}_0.pdb.gz")
-            except OSError as e:
-                print(
-                    f"Error removing file {output_folder}/decoy_R{rank}_I{i}_0.pdb: {e.strerror}"
-                )
+        # for i in range(start_index, end_index):
+        #     try:
+        #         os.remove(f"{output_folder}/decoy_R{rank}_I{i}_0.pdb.gz")
+        #     except OSError as e:
+        #         print(
+        #             f"Error removing file {output_folder}/decoy_R{rank}_I{i}_0.pdb: {e.strerror}"
+        #         )
 
         # If rank 0, process the gathered results
         if rank == 0:
