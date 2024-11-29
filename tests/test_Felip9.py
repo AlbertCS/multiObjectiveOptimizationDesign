@@ -14,10 +14,11 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         data = AlgorithmDataSingleton()
         optimizer = "genetic_algorithm"
         params_folder = "tests/data/Felip9/PET_params"
-        cpus = 4
+        cpus = 20
         native_pdb = "tests/data/Felip9/FeLip9-PET-1.pdb"
         distances_file = "tests/data/distances.json"
         cst_file = "tests/data/Felip9/FeLip9-PET-1_CA.cst"
+        starting_sequences = "tests/data/Felip9/ProtNPMM_native_small.fasta"
 
         # starting_sequences = "tests/data/Felip9/ProtNPMM_native_small.fasta"
         metrics = [
@@ -36,7 +37,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         ]
         debug = True
         max_iteration = 50
-        population_size = 20
+        population_size = 50
         seed = 1235
         eval_mutations_params = {
             "cst_file": cst_file,
@@ -75,7 +76,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             population_size=population_size,
             offset=1,
             eval_mutations_params=eval_mutations_params,
-            # starting_sequences=starting_sequences,
+            starting_sequences=starting_sequences,
             mutations_probabilities=mutations_probabilities,
             recombination_with_mutation=False,
         )

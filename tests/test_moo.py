@@ -5,7 +5,6 @@ import unittest
 from unittest.mock import MagicMock
 
 from Bio.Seq import Seq
-from icecream import ic
 
 from mood.base.data import AlgorithmDataSingleton
 from mood.metrics.alphabetic import Alphabet

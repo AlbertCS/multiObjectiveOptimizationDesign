@@ -650,14 +650,29 @@ class GeneticAlgorithm(Optimizer):
     # Function to evaluate a single mutation
     def evaluate_single_mutation(self, arg):
         self.init_pyrosetta()
+        dEnergy = 0
         child_sequence, mut, sequence_to_start_from, chain = arg
-        dEnergy = self.local_relax(
-            residues=[mut[0][1]],
-            moving_chain=chain,
-            starting_sequence=sequence_to_start_from,
-            mutated_sequence=child_sequence,
-            cst_file=self.eval_mutations_params["cst_file"],
-        )
+        if not os.path.exists("debug"):
+            os.mkdir("debug")
+        try:
+            dEnergy = self.local_relax(
+                residues=[mut[0][1] + 1],
+                moving_chain=chain,
+                starting_sequence=sequence_to_start_from,
+                mutated_sequence=child_sequence,
+                cst_file=self.eval_mutations_params["cst_file"],
+            )
+        except Exception as e:
+            with open(f"debug/{chain}_{child_sequence}.txt", "w") as f:
+                f.write(f"*** Evaluating mutation ***\n")
+                f.write(f"Child sequence: {child_sequence}\n")
+                f.write(f"Mutation: {mut}\n")
+                f.write(f"Sequence to start from: {sequence_to_start_from}\n")
+                f.write(f"Chain: {chain}\n")
+                f.write(f"dEnergy: {dEnergy}\n")
+                f.write(f"Error: {e}\n")
+                f.write(f"*** Done envaluating mutation ***\n")
+            
 
         return child_sequence, mut, sequence_to_start_from, dEnergy
 
