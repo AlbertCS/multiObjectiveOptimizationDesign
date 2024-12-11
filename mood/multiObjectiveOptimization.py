@@ -11,6 +11,7 @@ import random
 import shutil
 import time
 
+import numpy as np
 import pandas as pd
 from Bio.PDB.PDBParser import PDBParser
 from Bio.Seq import Seq
@@ -101,6 +102,7 @@ class MultiObjectiveOptimization:
         mutation_rate=None,
         folder_name="mood_job",
         mutable_aa=None,
+        mutation_probability=False,
         mutations_probabilities=None,
         population_size=100,
         offset=None,
@@ -150,7 +152,9 @@ class MultiObjectiveOptimization:
                 for chain, positions in mutable_aa.items()
             }
 
-        self.mutations_probabilities = mutations_probabilities
+        if mutation_probability:
+            self.mutations_probabilities = mutations_probabilities
+            self.mutation_probability = mutation_probability
         self.recombination_with_mutation = recombination_with_mutation
 
         if isinstance(chains, str):
@@ -388,6 +392,7 @@ class MultiObjectiveOptimization:
             "mutation_rate": self.mutation_rate,
             "mutable_aa": self.mutable_aa,
             "population_size": self.population_size,
+            "mutation_probabilities": self.mutations_probabilities,
         }
         with open(
             self.folder_name + "/input/info.pkl",
@@ -407,6 +412,7 @@ class MultiObjectiveOptimization:
         self.mutation_rate = info["mutation_rate"]
         self.mutable_aa = info["mutable_aa"]
         self.population_size = info["population_size"]
+        self.mutations_probabilities = info["mutation_probabilities"]
 
     def run(self):
 
@@ -429,6 +435,8 @@ class MultiObjectiveOptimization:
         parents_sequences_df = {}
 
         # Get if the algorithm is finished, total_sequences, and the dataframe of the last iterations
+        self.logger.info("Initializing...")
+        self.logger.info("Checking previous iterations")
         finished, evaluated_sequences_df = self.check_previous_iterations()
         parents_sequences = {
             chain: df["Sequence"].tolist()
@@ -442,8 +450,12 @@ class MultiObjectiveOptimization:
             message += "Increase the number of iterations to continue."
             print(message)
             return 0
+
         if self.current_iteration != 0:
+            self.logger.info("Loading the info from the previous iteration")
             self.load_info()
+
+        # Calculate the mutation probabilities of the ProteinMPNN if the flag is activated
 
         sequences_to_evaluate = {}
         sequences_to_save = {}
@@ -463,8 +475,33 @@ class MultiObjectiveOptimization:
                 self.native_sequence = seq_chains
                 self.optimizer.native = self.native_sequence
 
+                if self.mutations_probabilities is None:
+                    self.mutations_probabilities = {}
+
                 # For each chain, initialize the population
                 for chain in self.chains:
+                    # If we initialize the population with proteinMPNN and using mutation probabilities
+                    if self.mutation_probability:
+
+                        from mood.utils.utils_proteinMPNN import (
+                            mutation_probabilities_calculation_proteinMPNN,
+                        )
+
+                        self.logger.info(
+                            "Calculating the mutation probabilities with ProteinMPNN"
+                        )
+                        self.mutations_probabilities[chain], seq_proteinmpnn = (
+                            mutation_probabilities_calculation_proteinMPNN(
+                                chain=chain,
+                                folder_name=self.folder_name,
+                                native_pdb=self.native_pdb,
+                                seed=self.seed,
+                                population_size=self.population_size,
+                            )
+                        )
+                        self.starting_sequences = {}
+                        self.starting_sequences[chain] = seq_proteinmpnn
+
                     if self.starting_sequences is not None:
                         self.logger.info("Using the starting sequences")
                         # Adding starting sequences to the native
@@ -520,6 +557,7 @@ class MultiObjectiveOptimization:
                 metric_objectives = []
                 metric_result = None
                 for metric in self.metrics:
+                    self.logger.info(f"Calculating {metric.name} ...")
                     metric_result = metric.compute(
                         sequences=sequences_to_evaluate_str,
                         iteration=self.current_iteration,
