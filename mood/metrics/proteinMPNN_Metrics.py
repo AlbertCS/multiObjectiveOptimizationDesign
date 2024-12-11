@@ -15,7 +15,7 @@ class ProteinMPNNMetrics(Metric):
         chain,
         seed,
         native_pdb,
-        num_seq_per_target=5,
+        num_seq_per_target=1,
         sampling_temp="0.1",
         score_only=True,
         batch_size=1,
