@@ -5,7 +5,13 @@ import pandas as pd
 
 
 def mutation_probabilities_calculation_proteinMPNN(
-    chain, folder_name, native_pdb, seed, population_size, mutation_probabilities={}
+    chain,
+    folder_name,
+    native_pdb,
+    seed,
+    population_size,
+    fixed_positions,
+    mutation_probabilities={},
 ):
 
     from mood.metrics.ProteinMPNN.protein_mpnn_run import mpnn_main
@@ -13,16 +19,53 @@ def mutation_probabilities_calculation_proteinMPNN(
     # Run the ProteinMPNN
 
     out_folder = f"{folder_name}/input/mpnn_{chain}"
-    mpnn_main(
-        pdb_path=native_pdb,
-        pdb_path_chains=chain,
-        out_folder=out_folder,
-        seed=seed,
-        num_seq_per_target=population_size,
-        sampling_temp="0.1",
-        save_probs=True,
-        suppress_print=True,
-    )
+
+    if fixed_positions:
+        from mood.metrics.ProteinMPNN.parse_multiple_chains import (
+            main_parse_multiple_chains,
+        )
+
+        path_for_parsed_pdbs = f"{out_folder}/parsed_pdbs.jsonl"
+        path_for_fixed_positions = f"{out_folder}/fixed_positions.json"
+
+        main_parse_multiple_chains(
+            input_path=f"{folder_name}/input",
+            output_path=path_for_parsed_pdbs,
+        )
+
+        from mood.metrics.ProteinMPNN.make_fixed_positions_dict import (
+            main_make_fixed_positions,
+        )
+
+        main_make_fixed_positions(
+            input_path=path_for_parsed_pdbs,
+            output_path=path_for_fixed_positions,
+            chain_list=chain,
+            position_list=fixed_positions[chain],
+        )
+        mpnn_main(
+            jsonl_path=path_for_parsed_pdbs,
+            pdb_path_chains=chain,
+            fixed_positions_jsonl=path_for_fixed_positions,
+            out_folder=out_folder,
+            seed=seed,
+            num_seq_per_target=population_size,
+            sampling_temp="0.3",
+            save_probs=True,
+            suppress_print=True,
+        )
+
+    else:
+        mpnn_main(
+            pdb_path=native_pdb,
+            pdb_path_chains=chain,
+            out_folder=out_folder,
+            seed=seed,
+            num_seq_per_target=population_size,
+            sampling_temp="0.3",
+            save_probs=True,
+            suppress_print=True,
+        )
 
     loaded_data = np.load(
         f"{out_folder}/probs/{native_pdb.split('/')[-1].split('.')[0]}.npz"
