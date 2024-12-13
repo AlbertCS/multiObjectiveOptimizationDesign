@@ -5,6 +5,7 @@
 """
 
 import argparse
+import json
 import os
 import pickle
 import random
@@ -109,6 +110,7 @@ class MultiObjectiveOptimization:
         starting_sequences=None,
         recombination_with_mutation=False,
         eval_mutations_params=None,
+        fixed_positions=None,
     ) -> None:
 
         # Define the logger
@@ -144,24 +146,39 @@ class MultiObjectiveOptimization:
             with open(starting_sequences, "rb") as f:
                 self.starting_sequences = pickle.load(f)
 
-        if offset is None:
-            self.mutable_aa = mutable_aa
+        if mutable_aa is None:
+            self.mutable_aa = self._generate_all_aa_mutable()
         else:
-            self.mutable_aa = {
-                chain: {int(pos) - offset: aa for pos, aa in positions.items()}
-                for chain, positions in mutable_aa.items()
-            }
+            if offset is None:
+                self.mutable_aa = mutable_aa
+            else:
+                self.mutable_aa = {
+                    chain: {int(pos) - offset: aa for pos, aa in positions.items()}
+                    for chain, positions in mutable_aa.items()
+                }
 
         if mutation_probability:
             self.mutations_probabilities = mutations_probabilities
             self.mutation_probability = mutation_probability
+            self.mutable_aa = self._generate_all_aa_mutable()
         self.recombination_with_mutation = recombination_with_mutation
+
+        # Load fixed positions if necessary
+        if fixed_positions:
+            with open(fixed_positions, "r") as f:
+                self.fixed_positions = json.load(f)
+
+            # Drop the fixed positions from the mutable_aa
+            for chain in self.chains:
+                for pos in self.fixed_positions[chain]:
+                    self.mutable_aa[chain].pop(str(pos))
 
         if isinstance(chains, str):
             self.chains = [chains]
         elif isinstance(chains, list):
             self.chains = chains
 
+        # Calculate the mutation rate if not specified
         for chain in self.chains:
             if mutation_rate is None:
                 self.mutation_rate[chain] = 1 / len(self.mutable_aa[chain].keys())
@@ -188,6 +205,38 @@ class MultiObjectiveOptimization:
                     eval_mutations=eval_mutations,
                     eval_mutations_params=eval_mutations_params,
                 )
+
+    def _generate_all_aa_mutable(self):
+        """Generate all amino acids as mutable."""
+        all_aa = [
+            "A",
+            "C",
+            "D",
+            "E",
+            "F",
+            "G",
+            "H",
+            "I",
+            "K",
+            "L",
+            "M",
+            "N",
+            "P",
+            "Q",
+            "R",
+            "S",
+            "T",
+            "V",
+            "W",
+            "Y",
+        ]
+        seq_chains = self._get_seq_from_pdb(pdb_file=self.native_pdb)
+        mutable_aa = {}
+        for chain in self.chains:
+            mutable_aa[chain] = {}
+            for i in range(0, len(seq_chains[chain][0])):
+                mutable_aa[chain][str(i)] = all_aa
+        return mutable_aa
 
     def _get_seq_from_pdb(self, structure_id="initial_structure", pdb_file=None):
 
@@ -562,6 +611,7 @@ class MultiObjectiveOptimization:
                         sequences=sequences_to_evaluate_str,
                         iteration=self.current_iteration,
                         folder_name=self.folder_name,
+                        chain=chain,
                     )
                     self.logger.info(f"Metric {metric.name} calculated")
                     metric_df = metric_df.merge(metric_result, on="Sequence")
