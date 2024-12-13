@@ -76,7 +76,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             native_pdb=native_pdb,
             chains=chains,
             data=data,
-            mutable_aa=mutable_aa,
+            mutable_aa=None,
             folder_name=folder_name,
             seed=seed,
             population_size=population_size,
