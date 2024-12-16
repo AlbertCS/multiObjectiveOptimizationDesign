@@ -1,7 +1,7 @@
 import argparse
 
 
-def main_parse_multiple_chains(input_path, output_path, ca_only):
+def main_parse_multiple_chains(input_path, output_path, ca_only=False):
 
     import glob
     import gzip
