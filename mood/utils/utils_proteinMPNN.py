@@ -1,7 +1,7 @@
 import json
+import os
 
 import numpy as np
-import pandas as pd
 
 
 def mutation_probabilities_calculation_proteinMPNN(
@@ -11,14 +11,16 @@ def mutation_probabilities_calculation_proteinMPNN(
     seed,
     population_size,
     fixed_positions,
-    mutation_probabilities={},
 ):
 
     from mood.metrics.ProteinMPNN.protein_mpnn_run import mpnn_main
 
     # Run the ProteinMPNN
 
+    mutation_probabilities = {}
     out_folder = f"{folder_name}/input/mpnn_{chain}"
+    if not os.path.exists(out_folder):
+        os.makedirs(out_folder)
 
     if fixed_positions:
         from mood.metrics.ProteinMPNN.parse_multiple_chains import (
@@ -41,8 +43,23 @@ def mutation_probabilities_calculation_proteinMPNN(
             input_path=path_for_parsed_pdbs,
             output_path=path_for_fixed_positions,
             chain_list=chain,
-            position_list=fixed_positions[chain],
+            position_list=fixed_positions,
         )
+
+        # Get the conditional probabilities
+        mpnn_main(
+            jsonl_path=path_for_parsed_pdbs,
+            pdb_path_chains=chain,
+            fixed_positions_jsonl=path_for_fixed_positions,
+            out_folder=out_folder,
+            seed=seed,
+            num_seq_per_target=1,
+            sampling_temp="0.3",
+            suppress_print=True,
+            conditional_probs_only=True,
+        )
+
+        # Calculate the 100 initial sequences
         mpnn_main(
             jsonl_path=path_for_parsed_pdbs,
             pdb_path_chains=chain,
@@ -51,11 +68,22 @@ def mutation_probabilities_calculation_proteinMPNN(
             seed=seed,
             num_seq_per_target=population_size,
             sampling_temp="0.3",
-            save_probs=True,
             suppress_print=True,
         )
 
     else:
+        # Get the conditional probabilities
+        mpnn_main(
+            pdb_path=native_pdb,
+            pdb_path_chains=chain,
+            out_folder=out_folder,
+            seed=seed,
+            num_seq_per_target=1,
+            sampling_temp="0.3",
+            suppress_print=True,
+            conditional_probs_only=True,
+        )
+        # Calculate the 100 initial sequences
         mpnn_main(
             pdb_path=native_pdb,
             pdb_path_chains=chain,
@@ -68,42 +96,21 @@ def mutation_probabilities_calculation_proteinMPNN(
         )
 
     loaded_data = np.load(
-        f"{out_folder}/probs/{native_pdb.split('/')[-1].split('.')[0]}.npz"
+        f"{out_folder}/conditional_probs_only/{native_pdb.split('/')[-1].split('.')[0]}.npz"
     )
-    probs = loaded_data["probs"]
 
-    # Define the alphabet
-    alphabet = list("ACDEFGHIKLMNPQRSTVWYX")
+    # Load log-probabilities
+    log_probs = loaded_data["log_p"]
 
-    # Initialize arrays to store the sum of probabilities and sum of squared differences
-    num_sequences = len(probs)
-    num_positions = len(probs[0])
-    num_amino_acids = len(alphabet)
+    # Step 1: Exponentiate the log-probabilities to get probabilities
+    probs = np.exp(log_probs)
 
-    prob_sums = np.zeros((num_positions, num_amino_acids))
-    # squared_diff_sums = np.zeros((num_positions, num_amino_acids))
-
-    # Iterate through the sequences and accumulate the probabilities
-    for seq in probs:
-        for pos in range(num_positions):
-            prob_sums[pos] += seq[pos]
-
-    # Calculate the mean probabilities
-    mean_probs = prob_sums / num_sequences
-
-    # # Iterate through the sequences again to accumulate the squared differences
-    # for seq in probs:
-    #     for pos in range(num_positions):
-    #         squared_diff_sums[pos] += (seq[pos] - mean_probs[pos]) ** 2
-
-    # # Calculate the variance and then the standard deviation
-    # variance = squared_diff_sums / num_sequences
-    # std_deviation = np.sqrt(variance)
+    # Step 2: Normalize the probabilities (optional, as softmax already normalizes)
+    probs /= probs.sum(axis=-1, keepdims=True)
 
     # Get the dictionary of the probabilities
-
-    for i in range(len(mean_probs)):
-        mutation_probabilities[str(i)] = mean_probs[i].tolist()[:-1]
+    for i in range(len(probs[0])):
+        mutation_probabilities[str(i)] = probs[0][i].tolist()[:-1]
 
     with open(f"{out_folder}/mutation_probs.json", "w") as f:
         json.dump(mutation_probabilities, f)

@@ -67,6 +67,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             mutations_probs = json.load(f)
         mutable_aa = {"A": design}
         mutations_probabilities = {"A": mutations_probs}
+        fixed_positions = f"{data_path}/fixed_positions.json"
 
         self.moo = MultiObjectiveOptimization(
             optimizer=optimizer,
@@ -86,6 +87,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             mutations_probabilities=mutations_probabilities,
             mutation_probability=True,
             recombination_with_mutation=False,
+            fixed_positions=fixed_positions,
         )
 
     def test_run(self):

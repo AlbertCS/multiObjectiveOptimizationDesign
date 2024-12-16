@@ -171,7 +171,8 @@ class MultiObjectiveOptimization:
             # Drop the fixed positions from the mutable_aa
             for chain in self.chains:
                 for pos in self.fixed_positions[chain]:
-                    self.mutable_aa[chain].pop(str(pos))
+                    if str(pos) in self.mutable_aa[chain]:
+                        self.mutable_aa[chain].pop(str(pos))
 
         if isinstance(chains, str):
             self.chains = [chains]
@@ -546,6 +547,7 @@ class MultiObjectiveOptimization:
                                 native_pdb=self.native_pdb,
                                 seed=self.seed,
                                 population_size=self.population_size,
+                                fixed_positions=self.fixed_positions,
                             )
                         )
                         self.starting_sequences = {}
