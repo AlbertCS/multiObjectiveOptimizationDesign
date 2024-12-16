@@ -11,7 +11,7 @@ def main_make_fixed_positions(
     with open(input_path, "r") as json_file:
         json_list = list(json_file)
 
-    fixed_list = [[int(item) for item in one] for one in position_list]
+    fixed_list = [[int(item) for item in position_list[one]] for one in position_list]
     global_designed_chain_list = [str(item) for item in chain_list.split()]
     my_dict = {}
 
