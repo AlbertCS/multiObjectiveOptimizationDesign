@@ -86,7 +86,7 @@ class RosettaMetrics(Metric):
                 for line in script_file:
                     sof.write(line)
 
-    def compute(self, sequences, iteration, folder_name):
+    def compute(self, sequences, iteration, folder_name, chain):
 
         # Create df
         df = pd.DataFrame(sequences, columns=["Sequence"])

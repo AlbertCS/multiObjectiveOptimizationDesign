@@ -1,4 +1,5 @@
 import io
+import json
 import os
 
 import numpy as np
@@ -12,13 +13,13 @@ from mood.metrics.ProteinMPNN.protein_mpnn_run import mpnn_main
 class ProteinMPNNMetrics(Metric):
     def __init__(
         self,
-        chain,
         seed,
         native_pdb,
-        num_seq_per_target=5,
+        num_seq_per_target=1,
         sampling_temp="0.1",
         score_only=True,
         batch_size=1,
+        fixed_positions=None,
     ):
         super().__init__()
         self.state = {
@@ -29,11 +30,12 @@ class ProteinMPNNMetrics(Metric):
         self.name = "proteinMPNNMetrics"
         self.seed = seed
         self.native_pdb = native_pdb
-        self.chain = chain
         self.num_seq_per_target = num_seq_per_target
         self.sampling_temp = sampling_temp
         self.score_only = score_only
         self.batch_size = batch_size
+        with open(fixed_positions, "r") as f:
+            self.fixed_positions = json.load(f)
 
     @property
     def objectives(self):
@@ -75,7 +77,7 @@ class ProteinMPNNMetrics(Metric):
                 for line in script_file:
                     sof.write(line)
 
-    def compute(self, sequences, iteration, folder_name):
+    def compute(self, sequences, iteration, folder_name, chain):
 
         # Create df
         df = pd.DataFrame(sequences, columns=["Sequence"])
@@ -96,11 +98,32 @@ class ProteinMPNNMetrics(Metric):
                 file.write(f">s{i}\n")
                 file.write(sequence + "\n")
 
+        # if self.fixed_positions:
+        #     from mood.metrics.ProteinMPNN.parse_multiple_chains import (
+        #         main_parse_multiple_chains,
+        #     )
+
+        #     main_parse_multiple_chains(
+        #         input_path=f"{folder_name}/input",
+        #         output_path=f"{output_folder}/parsed_pdbs.jsonl",
+        #     )
+
+        #     from mood.metrics.ProteinMPNN.make_fixed_positions_dict import (
+        #         main_make_fixed_positions,
+        #     )
+
+        #     main_make_fixed_positions(
+        #         input_path=f"{output_folder}/parsed_pdbs.jsonl",
+        #         output_path=f"{output_folder}/fixed_positions.json",
+        #         chain_list=chain,
+        #         position_list=self.fixed_positions[chain],
+        #     )
+
         # Run the ProteinMPNN
         mpnn_main(
             path_to_fasta=sequences_file,
             pdb_path=self.native_pdb,
-            pdb_path_chains=self.chain,
+            pdb_path_chains=chain,
             out_folder=output_folder,
             seed=self.seed,
             num_seq_per_target=self.num_seq_per_target,
