@@ -533,7 +533,10 @@ if __name__ == "__main__":
     print(f"Patches:\n{patches}")
 
     options = f"-relax:default_repeats 1 -constant_seed true -jran {args.seed}"
-    options += f" -extra_res_fa {params} -extra_patch_fa {patches}"
+    if params:
+        options += f" -extra_res_fa {params}"
+    if patches:
+        options += f" -extra_patch_fa {patches}"
 
     prs.pyrosetta.init(options=options)
 
