@@ -138,6 +138,7 @@ class MultiObjectiveOptimization:
         self.sequences = {chain: {} for chain in self.chains}
         self.sequences_file_name = "sequences.pkl"
         self.data_frame_file_name = "data_frame.pkl"
+        self.fixed_positions = fixed_positions
 
         # Load initial sequences if necessary
         if starting_sequences is None:
