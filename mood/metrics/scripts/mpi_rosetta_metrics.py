@@ -509,9 +509,8 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     distances = None
-
-    params = []
-    patches = []
+    params = None
+    patches = None
 
     if args.params_folder is not None:
         patches = [
@@ -526,16 +525,12 @@ if __name__ == "__main__":
         ]
 
     # Prom a list of path files, create a string with all the paths separated by a space
-    params = " ".join(params)
-    patches = " ".join(patches)
-
-    print(f"Params:\n{params}")
-    print(f"Patches:\n{patches}")
-
     options = f"-relax:default_repeats 1 -constant_seed true -jran {args.seed}"
     if params:
+        params = " ".join(params)
         options += f" -extra_res_fa {params}"
     if patches:
+        patches = " ".join(patches)
         options += f" -extra_patch_fa {patches}"
 
     prs.pyrosetta.init(options=options)

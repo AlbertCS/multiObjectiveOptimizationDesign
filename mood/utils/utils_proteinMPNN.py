@@ -10,7 +10,7 @@ def mutation_probabilities_calculation_proteinMPNN(
     native_pdb,
     seed,
     population_size,
-    fixed_positions,
+    fixed_positions=None,
 ):
 
     from mood.metrics.ProteinMPNN.protein_mpnn_run import mpnn_main

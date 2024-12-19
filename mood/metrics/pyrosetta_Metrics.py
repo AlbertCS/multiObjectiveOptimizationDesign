@@ -11,10 +11,10 @@ from mood.metrics import Metric
 class RosettaMetrics(Metric):
     def __init__(
         self,
-        params_folder,
         cpus,
         seed,
         native_pdb,
+        params_folder=None,
         distances_file=None,
         cst_file=None,
         ligand_chain=None,
