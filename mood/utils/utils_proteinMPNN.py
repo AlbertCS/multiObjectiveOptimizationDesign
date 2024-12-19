@@ -11,6 +11,7 @@ def mutation_probabilities_calculation_proteinMPNN(
     seed,
     population_size,
     fixed_positions=None,
+    generate_sequences=False,
 ):
 
     from mood.metrics.ProteinMPNN.protein_mpnn_run import mpnn_main
@@ -59,17 +60,18 @@ def mutation_probabilities_calculation_proteinMPNN(
             conditional_probs_only=True,
         )
 
-        # Calculate the 100 initial sequences
-        mpnn_main(
-            jsonl_path=path_for_parsed_pdbs,
-            pdb_path_chains=chain,
-            fixed_positions_jsonl=path_for_fixed_positions,
-            out_folder=out_folder,
-            seed=seed,
-            num_seq_per_target=population_size,
-            sampling_temp="0.3",
-            suppress_print=True,
-        )
+        if generate_sequences:
+            # Calculate the 100 initial sequences
+            mpnn_main(
+                jsonl_path=path_for_parsed_pdbs,
+                pdb_path_chains=chain,
+                fixed_positions_jsonl=path_for_fixed_positions,
+                out_folder=out_folder,
+                seed=seed,
+                num_seq_per_target=population_size,
+                sampling_temp="0.3",
+                suppress_print=True,
+            )
 
     else:
         # Get the conditional probabilities
@@ -83,17 +85,18 @@ def mutation_probabilities_calculation_proteinMPNN(
             suppress_print=True,
             conditional_probs_only=True,
         )
-        # Calculate the 100 initial sequences
-        mpnn_main(
-            pdb_path=native_pdb,
-            pdb_path_chains=chain,
-            out_folder=out_folder,
-            seed=seed,
-            num_seq_per_target=population_size,
-            sampling_temp="0.3",
-            save_probs=True,
-            suppress_print=True,
-        )
+        if generate_sequences:
+            # Calculate the 100 initial sequences
+            mpnn_main(
+                pdb_path=native_pdb,
+                pdb_path_chains=chain,
+                out_folder=out_folder,
+                seed=seed,
+                num_seq_per_target=population_size,
+                sampling_temp="0.3",
+                save_probs=True,
+                suppress_print=True,
+            )
 
     loaded_data = np.load(
         f"{out_folder}/conditional_probs_only/{native_pdb.split('/')[-1].split('.')[0]}.npz"

@@ -25,13 +25,13 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         # starting_sequences = "tests/data/Felip9/ProtNPMM_native_small.fasta"
         metrics = [
             RosettaMetrics(
-                params_folder=params_folder,
+                params_folder=None,
                 cpus=cpus,
                 seed=1235,
                 native_pdb=native_pdb,
                 ligand_chain="L",
                 distances_file=distances_file,
-                cst_file=cst_file,
+                # cst_file=cst_file,
             ),
             # ProteinMPNNMetrics(
             #     chain="A", seed=1235, native_pdb=native_pdb, sampling_temp="0.1"
@@ -83,11 +83,11 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             population_size=population_size,
             offset=1,
             # eval_mutations_params=eval_mutations_params,
-            # starting_sequences=starting_sequences,
+            starting_sequences=starting_sequences,
             mutations_probabilities=mutations_probabilities,
             mutation_probability=True,
-            recombination_with_mutation=False,
-            fixed_positions=fixed_positions,
+            # recombination_with_mutation=False,
+            # fixed_positions=fixed_positions,
         )
 
     def test_run(self):

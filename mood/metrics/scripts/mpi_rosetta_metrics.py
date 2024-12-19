@@ -509,10 +509,15 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     distances = None
-    params = None
-    patches = None
 
-    if args.params_folder != None:
+    if args.params_folder is None:
+        patches = []
+        params = []
+    elif not os.path.exists(args.params_folder):  # Add this check
+        print(f"Warning: Directory {args.params_folder} does not exist")
+        patches = []
+        params = []
+    else:
         patches = [
             args.params_folder + "/" + x
             for x in os.listdir(args.params_folder)
@@ -526,10 +531,10 @@ if __name__ == "__main__":
 
     # Prom a list of path files, create a string with all the paths separated by a space
     options = f"-relax:default_repeats 1 -constant_seed true -jran {args.seed}"
-    if params:
+    if params != []:
         params = " ".join(params)
         options += f" -extra_res_fa {params}"
-    if patches:
+    if patches != []:
         patches = " ".join(patches)
         options += f" -extra_patch_fa {patches}"
 
