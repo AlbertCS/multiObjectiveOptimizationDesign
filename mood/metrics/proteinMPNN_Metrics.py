@@ -34,8 +34,10 @@ class ProteinMPNNMetrics(Metric):
         self.sampling_temp = sampling_temp
         self.score_only = score_only
         self.batch_size = batch_size
-        with open(fixed_positions, "r") as f:
-            self.fixed_positions = json.load(f)
+        self.fixed_positions = {}
+        if fixed_positions is not None:
+            with open(fixed_positions, "r") as f:
+                self.fixed_positions = json.load(f)
 
     @property
     def objectives(self):
@@ -98,6 +100,7 @@ class ProteinMPNNMetrics(Metric):
                 file.write(f">s{i}\n")
                 file.write(sequence + "\n")
 
+        # Not needed for the evaluation only when creating the sequences
         # if self.fixed_positions:
         #     from mood.metrics.ProteinMPNN.parse_multiple_chains import (
         #         main_parse_multiple_chains,
