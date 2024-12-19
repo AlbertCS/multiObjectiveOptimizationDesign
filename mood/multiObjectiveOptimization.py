@@ -104,7 +104,7 @@ class MultiObjectiveOptimization:
         folder_name="mood_job",
         mutable_aa=None,
         mutation_probability=False,
-        mutations_probabilities=None,
+        mutations_probabilities={},
         population_size=100,
         offset=None,
         starting_sequences=None,
@@ -161,12 +161,18 @@ class MultiObjectiveOptimization:
             self.mutations_probabilities = mutations_probabilities
             self.mutation_probability = mutation_probability
             self.mutable_aa = self._generate_all_aa_mutable()
+
         self.recombination_with_mutation = recombination_with_mutation
 
         # Load fixed positions if necessary
         if fixed_positions:
             with open(fixed_positions, "r") as f:
                 self.fixed_positions = json.load(f)
+
+            self.fixed_positions = {
+                chain: {int(pos) - offset for pos in positions}
+                for chain, positions in self.fixed_positions.items()
+            }
 
             # Drop the fixed positions from the mutable_aa
             for chain in self.chains:
@@ -524,9 +530,6 @@ class MultiObjectiveOptimization:
                 # Save natives sequences
                 self.native_sequence = seq_chains
                 self.optimizer.native = self.native_sequence
-
-                if self.mutations_probabilities is None:
-                    self.mutations_probabilities = {}
 
                 # For each chain, initialize the population
                 for chain in self.chains:
