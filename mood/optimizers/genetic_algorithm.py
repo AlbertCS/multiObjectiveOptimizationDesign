@@ -59,29 +59,35 @@ class GeneticAlgorithm(Optimizer):
         import pyrosetta as prs
 
         self.native_pdb = self.eval_mutations_params["native_pdb"]
+        params = []
+        patches = []
+        if "cst_file" not in self.eval_mutations_params.keys():
+            self.eval_mutations_params["cst_file"] = None
 
-        if self.eval_mutations_params["params_folder"] != None:
-            patches = [
-                self.eval_mutations_params["params_folder"] + "/" + x
-                for x in os.listdir(self.eval_mutations_params["params_folder"])
-                if x.endswith(".txt")
-            ]
-            params = [
-                self.eval_mutations_params["params_folder"] + "/" + x
-                for x in os.listdir(self.eval_mutations_params["params_folder"])
-                if x.endswith(".params")
-            ]
-            if patches == []:
-                patches = None
-            if params == []:
-                raise ValueError(
-                    f"Params files were not found in the given folder: {self.eval_mutations_params["params_folder"]}!"
-                )
+        if "params_folder" in self.eval_mutations_params.keys():
+
+            if self.eval_mutations_params["params_folder"] != None and os.path.exists(
+                self.eval_mutations_params["params_folder"]
+            ):
+                patches = [
+                    self.eval_mutations_params["params_folder"] + "/" + x
+                    for x in os.listdir(self.eval_mutations_params["params_folder"])
+                    if x.endswith(".txt")
+                ]
+                params = [
+                    self.eval_mutations_params["params_folder"] + "/" + x
+                    for x in os.listdir(self.eval_mutations_params["params_folder"])
+                    if x.endswith(".params")
+                ]
+
         params = " ".join(params)
         patches = " ".join(patches)
 
         options = f"-relax:default_repeats 1 -constant_seed true -jran {self.eval_mutations_params["seed"]}"
-        options += f" -extra_res_fa {params} -extra_patch_fa {patches}"
+        if params != "":
+            options += f" -extra_res_fa {params}"
+        if patches != "":
+            options += f" -extra_patch_fa {patches}"
 
         prs.pyrosetta.init(options=options)
 
@@ -586,7 +592,7 @@ class GeneticAlgorithm(Optimizer):
             else:
                 new_aa = self.rng.choices(
                     self.mutable_aa[chain][position],
-                    mutations_probabilities[chain][str(position)],
+                    mutations_probabilities[chain][position],
                     k=1,
                 )[0]
             sequence_to_mutate_list[position] = new_aa
@@ -672,7 +678,6 @@ class GeneticAlgorithm(Optimizer):
                 f.write(f"dEnergy: {dEnergy}\n")
                 f.write(f"Error: {e}\n")
                 f.write(f"*** Done envaluating mutation ***\n")
-            
 
         return child_sequence, mut, sequence_to_start_from, dEnergy
 

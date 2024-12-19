@@ -243,7 +243,7 @@ class MultiObjectiveOptimization:
         for chain in self.chains:
             mutable_aa[chain] = {}
             for i in range(0, len(seq_chains[chain][0])):
-                mutable_aa[chain][str(i)] = all_aa
+                mutable_aa[chain][i] = all_aa
         return mutable_aa
 
     def _get_seq_from_pdb(self, structure_id="initial_structure", pdb_file=None):

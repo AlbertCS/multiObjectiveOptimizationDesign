@@ -113,7 +113,7 @@ def mutation_probabilities_calculation_proteinMPNN(
 
     # Get the dictionary of the probabilities
     for i in range(len(probs[0])):
-        mutation_probabilities[str(i)] = probs[0][i].tolist()[:-1]
+        mutation_probabilities[i] = probs[0][i].tolist()[:-1]
 
     with open(f"{out_folder}/mutation_probs.json", "w") as f:
         json.dump(mutation_probabilities, f)
