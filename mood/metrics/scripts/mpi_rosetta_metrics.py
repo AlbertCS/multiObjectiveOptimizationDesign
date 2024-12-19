@@ -510,7 +510,10 @@ if __name__ == "__main__":
     args = parse_arguments()
     distances = None
 
-    if args.params_folder != None:
+    params = []
+    patches = []
+
+    if args.params_folder is not None:
         patches = [
             args.params_folder + "/" + x
             for x in os.listdir(args.params_folder)
@@ -521,12 +524,6 @@ if __name__ == "__main__":
             for x in os.listdir(args.params_folder)
             if x.endswith(".params")
         ]
-        if patches == []:
-            patches = None
-        if params == []:
-            raise ValueError(
-                f"Params files were not found in the given folder: {args.params_folder}!"
-            )
 
     # Prom a list of path files, create a string with all the paths separated by a space
     params = " ".join(params)
