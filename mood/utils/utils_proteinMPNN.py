@@ -11,7 +11,7 @@ def mutation_probabilities_calculation_proteinMPNN(
     seed,
     population_size,
     fixed_positions=None,
-    generate_sequences=False,
+    generate_initial_seq=False,
 ):
 
     from mood.metrics.ProteinMPNN.protein_mpnn_run import mpnn_main
@@ -60,7 +60,7 @@ def mutation_probabilities_calculation_proteinMPNN(
             conditional_probs_only=True,
         )
 
-        if generate_sequences:
+        if generate_initial_seq:
             # Calculate the 100 initial sequences
             mpnn_main(
                 jsonl_path=path_for_parsed_pdbs,
@@ -85,7 +85,7 @@ def mutation_probabilities_calculation_proteinMPNN(
             suppress_print=True,
             conditional_probs_only=True,
         )
-        if generate_sequences:
+        if generate_initial_seq:
             # Calculate the 100 initial sequences
             mpnn_main(
                 pdb_path=native_pdb,

@@ -535,10 +535,7 @@ class MultiObjectiveOptimization:
                 # For each chain, initialize the population
                 for chain in self.chains:
                     # If we initialize the population with proteinMPNN and using mutation probabilities
-                    if (
-                        self.mutation_probability
-                        and self.mutations_probabilities is None
-                    ):
+                    if self.mutation_probability and self.mutations_probabilities == {}:
 
                         from mood.utils.utils_proteinMPNN import (
                             mutation_probabilities_calculation_proteinMPNN,

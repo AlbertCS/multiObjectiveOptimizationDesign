@@ -23,6 +23,15 @@
             "env": { "PYTHONPATH": "${workspaceRoot}"},
         },
         {
+            "name": "Test Top7",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/test_top7.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": { "PYTHONPATH": "${workspaceRoot}"},
+        },
+        {
             "name": "Test Ga",
             "type": "debugpy",
             "request": "launch",
