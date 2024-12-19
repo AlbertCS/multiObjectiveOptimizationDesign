@@ -512,7 +512,7 @@ if __name__ == "__main__":
     params = None
     patches = None
 
-    if args.params_folder is not None:
+    if args.params_folder != None:
         patches = [
             args.params_folder + "/" + x
             for x in os.listdir(args.params_folder)
