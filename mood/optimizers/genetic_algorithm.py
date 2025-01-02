@@ -1,5 +1,4 @@
 import concurrent.futures
-import multiprocessing
 import os
 import random
 from typing import Any, Dict
@@ -36,7 +35,6 @@ class GeneticAlgorithm(Optimizer):
             optimizerType=OptimizersType.GA,
         )
 
-        multiprocessing.set_start_method("spawn")
         self.rng = random.Random(seed)
         # self.mutable_positions = mutable_positions
         self.mutable_aa = mutable_aa
@@ -659,7 +657,7 @@ class GeneticAlgorithm(Optimizer):
         dEnergy = 0
         child_sequence, mut, sequence_to_start_from, chain = arg
         if not os.path.exists("debug"):
-            os.mkdir("debug")
+            os.makedirs("debug", exist_ok=True)
         try:
             dEnergy = self.local_relax(
                 residues=[mut[0][1] + 1],
