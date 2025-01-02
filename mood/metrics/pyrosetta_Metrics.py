@@ -143,7 +143,7 @@ class RosettaMetrics(Metric):
 
         # Delete the pdb files
         for file in os.listdir(output_folder):
-            if file.endswith(".pdb"):
+            if file.endswith(".pdb") or file.endswith(".pdb.gz"):
                 os.remove(os.path.join(output_folder, file))
 
         if not os.path.exists(f"{output_folder}/rosetta_scores.csv"):
