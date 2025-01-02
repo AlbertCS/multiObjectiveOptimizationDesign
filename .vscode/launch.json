@@ -32,6 +32,15 @@
             "env": { "PYTHONPATH": "${workspaceRoot}"},
         },
         {
+            "name": "Test Hmfo",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/test_hmfo.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": { "PYTHONPATH": "${workspaceRoot}"},
+        },
+        {
             "name": "Test Ga",
             "type": "debugpy",
             "request": "launch",

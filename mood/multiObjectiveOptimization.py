@@ -178,8 +178,8 @@ class MultiObjectiveOptimization:
             # Drop the fixed positions from the mutable_aa
             for chain in self.chains:
                 for pos in self.fixed_positions[chain]:
-                    if str(pos) in self.mutable_aa[chain]:
-                        self.mutable_aa[chain].pop(str(pos))
+                    if pos in self.mutable_aa[chain]:
+                        self.mutable_aa[chain].pop(pos)
 
         if isinstance(chains, str):
             self.chains = [chains]
