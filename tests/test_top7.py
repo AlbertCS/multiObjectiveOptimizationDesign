@@ -56,7 +56,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             seed=seed,
             population_size=population_size,
             offset=3,
-            eval_mutations_params=eval_mutations_params,
+            # eval_mutations_params=eval_mutations_params,
             mutation_probability=True,
         )
 

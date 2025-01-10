@@ -645,7 +645,7 @@ class MultiObjectiveOptimization:
 
                 # Clean the unnecessary metric results
                 # Delete the pdb files
-                self.clean_metrics(self.folder_name, self.current_iteration)
+                # self.clean_metrics(self.folder_name, self.current_iteration)
 
                 # Evaluate the population and rank the individuals
                 self.logger.info("Evaluating and ranking the population")

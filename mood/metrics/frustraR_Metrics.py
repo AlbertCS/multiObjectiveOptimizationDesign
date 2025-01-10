@@ -1,7 +1,7 @@
+import json
 import os
 import subprocess
 
-import numpy as np
 import pandas as pd
 
 from mood.metrics import Metric
@@ -30,7 +30,7 @@ class FrustraRMetrics(Metric):
     def objectives(self):
         return self._objectives
 
-    def compute(self, sequences, iteration, folder_name, chain):
+    def compute(self, sequences, iteration, folder_name, chain=None):
 
         # Create df
         df = pd.DataFrame(sequences, columns=["Sequence"])
@@ -46,7 +46,7 @@ class FrustraRMetrics(Metric):
             os.makedirs(f"{output_folder}/pdb")
 
         # Copy the pdbs from the relax folder to the frustration folder
-        names = []
+        pdbs = []
         if os.path.exists(f"{folder_name}/{str(iteration).zfill(3)}/relax"):
             for file in os.listdir(f"{folder_name}/{str(iteration).zfill(3)}/relax"):
                 if file.endswith(".pdb"):
@@ -55,11 +55,18 @@ class FrustraRMetrics(Metric):
                         + file.split("_")[2].replace("I", "")
                         + ".pdb"
                     )
-                    names.append(name)
-        names.sort()
-        for name in names:
-            pdb = f"{folder_name}/{str(iteration).zfill(3)}/relax/{name}"
-            os.system(f"cp {pdb} {f"{output_folder}/pdb"}")
+                    pdbs.append(f"{folder_name}/{str(iteration).zfill(3)}/relax/{file}")
+        pdbs.sort()
+        names = []
+        for pdb in pdbs:
+            name_pdb = pdb.split("/")[-1]
+            name = (
+                name_pdb.split("_")[0]
+                + name_pdb.split("_")[2].replace("I", "")
+                + ".pdb"
+            )
+            names.append(name)
+            os.system(f"cp {pdb} {f"{output_folder}/pdb/{name}"}")
 
         # Get the msa file
         # Specify the output file name
@@ -69,7 +76,7 @@ class FrustraRMetrics(Metric):
             # Iterate over the sequences
             for sequence, name in zip(sequences, names):
                 # Write each sequence to the file
-                file.write(f">s{name}\n")
+                file.write(f">{name.replace(".pdb", "")}\n")
                 file.write(sequence + "\n")
 
         # Run the frustration calculation
@@ -80,7 +87,7 @@ class FrustraRMetrics(Metric):
             file.write(script_value)
 
         try:
-            cmd = f"sh frustra.sh"
+            cmd = f"sh {output_folder}/frustra.sh"
 
             proc = subprocess.Popen(
                 cmd,
@@ -98,39 +105,42 @@ class FrustraRMetrics(Metric):
         except Exception as e:
             raise Exception(f"An error occurred while running the Rosetta metrics: {e}")
 
-        if not os.path.exists(f"{output_folder}/pdb/{names[0]}.done"):
+        if not os.path.exists(
+            f"{output_folder}/pdb/{names[0].replace(".pdb", "")}.done"
+        ):
             raise ValueError("The FrustraR metrics did not run successfully")
 
         # Get the frustration values
-        accu_frustration = []
+        accu_frustration = {}
         accu_frst_index = []
         for name in names:
             with open(
-                f"{output_folder}/pdb/{name}.done/{name}.pdb_configurational_5adens",
+                f"{output_folder}/pdb/{name.replace(".pdb", "")}.done/FrustrationData/{name}_configurational_5adens",
                 "r",
             ) as file:
                 configurational = pd.read_csv(file, sep=" ")
             with open(
-                f"{output_folder}/pdb/{name}.done/{name}.pdb_singleresidue",
+                f"{output_folder}/pdb/{name.replace(".pdb", "")}.done/FrustrationData/{name}_singleresidue",
                 "r",
             ) as file:
                 frst_index = pd.read_csv(file, sep=" ")
 
-            frustration = []
+            frustration = {}
             # Get if the position is frustrated or not
             for row in configurational.iterrows():
                 if row[1].iloc[6] > row[1].iloc[7] and row[1].iloc[6] > row[1].iloc[8]:
                     # frustration.append("High")
-                    frustration.append(row[1].iloc[6])
+                    frustration[row[1].iloc[1]] = row[1].iloc[6]
                 elif (
                     row[1].iloc[7] > row[1].iloc[6] and row[1].iloc[7] > row[1].iloc[8]
                 ):
                     # frustration.append("Neutral")
-                    frustration.append(0)
+                    frustration[row[1].iloc[1]] = 0
                 else:
                     # frustration.append("Minimal")
-                    frustration.append(0)
-            accu_frustration.append(frustration)
+                    frustration[row[1].iloc[1]] = 0
+
+            accu_frustration[name.replace(".pdb", "")] = frustration.copy()
 
             # Get the summation of the positive indexes
             index = 0
@@ -141,8 +151,11 @@ class FrustraRMetrics(Metric):
             accu_frst_index.append(index)
 
         # Create the dataframe
-        df = pd.DataFrame(accu_frustration, columns=["relHighlyFrustratedResidues"])
-        df["HighlyFrustratedIndex"] = accu_frst_index
+        df = pd.DataFrame(accu_frst_index, columns=["HighlyFrustratedIndex"])
+
+        with open(f"{output_folder}/frust.json", "w") as f:
+            json.dump(accu_frustration, f)
+        accu_frustration
         # Add the sequence column
         df["Sequence"] = sequences
 

@@ -57,6 +57,15 @@
             "console": "integratedTerminal",
             "justMyCode": false,
             "env": { "PYTHONPATH": "${workspaceRoot}"},
+        },
+        {
+            "name": "Test Frustra",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/tests/metrics/test_frustar.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": { "PYTHONPATH": "${workspaceRoot}"},
         }
     ]
 }
