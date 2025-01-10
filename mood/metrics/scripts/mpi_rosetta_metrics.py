@@ -334,7 +334,7 @@ class Mpi_relax:
                 f"{output_folder}/decoy_R{rank}_I{i}",
                 nstruct=1,
                 scorefxn=sfxn_scorer,
-                compress=True,
+                compress=False,
             )
             # Get the mutated sequence translated to a pose
             pose = self.mutate_native_pose(native_pose, sequences[i])
@@ -391,7 +391,7 @@ class Mpi_relax:
 
         # Delete the pdbs
         # Construct the pattern to match the files
-        pattern = f"{output_folder}/decoy_R{rank}_*.pdb"
+        # pattern = f"{output_folder}/decoy_R{rank}_*.pdb"
 
         # Find all files matching the pattern
         # files_to_remove = glob.glob(pattern)
