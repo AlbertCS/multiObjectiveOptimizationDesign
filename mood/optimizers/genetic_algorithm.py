@@ -588,11 +588,22 @@ class GeneticAlgorithm(Optimizer):
             if mutations_probabilities is None:
                 new_aa = self.rng.choice(self.mutable_aa[chain][position])
             else:
-                new_aa = self.rng.choices(
-                    self.mutable_aa[chain][position],
-                    mutations_probabilities[chain][position],
-                    k=1,
-                )[0]
+                if position not in mutations_probabilities[chain].keys():
+                    self.logger.error(
+                        f"Position {position} not in the mutation probabilities"
+                    )
+                    self.logger.error(
+                        f"Available probabilities: {mutations_probabilities[chain].keys()}"
+                    )
+                    self.logger.error(
+                        f"Available positions: {self.mutable_aa[chain].keys()}"
+                    )
+                else:
+                    new_aa = self.rng.choices(
+                        self.mutable_aa[chain][position],
+                        mutations_probabilities[chain][position],
+                        k=1,
+                    )[0]
             sequence_to_mutate_list[position] = new_aa
             mut.append((sequence_to_mutate[position], position, new_aa))
 
