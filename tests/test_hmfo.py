@@ -36,12 +36,12 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         max_iteration = 50
         population_size = 10
         seed = 1235
-        eval_mutations_params = {
-            "min_energy_threshold": 0,
-            "seed": seed,
-            "params_folder": params,
-            "native_pdb": native_pdb,
-        }
+        # eval_mutations_params = {
+        #     "min_energy_threshold": 0,
+        #     "seed": seed,
+        #     "params_folder": params,
+        #     "native_pdb": native_pdb,
+        # }
         chains = ["A"]
 
         # Folder name and remove if exists
@@ -62,7 +62,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             population_size=population_size,
             offset=2,
             fixed_positions=fixed_positions,
-            eval_mutations_params=eval_mutations_params,
+            # eval_mutations_params=eval_mutations_params,
             mutation_probability=True,
         )
 
