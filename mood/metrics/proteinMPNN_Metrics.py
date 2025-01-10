@@ -1,10 +1,8 @@
-import io
 import json
 import os
 
 import numpy as np
 import pandas as pd
-from pkg_resources import Requirement, resource_stream
 
 from mood.metrics import Metric
 from mood.metrics.ProteinMPNN.protein_mpnn_run import mpnn_main
@@ -42,42 +40,6 @@ class ProteinMPNNMetrics(Metric):
     @property
     def objectives(self):
         return self._objectives
-
-    def _copyScriptFile(
-        self, output_folder, script_name, no_py=False, subfolder=None, hidden=True
-    ):
-        """
-        Copy a script file from the MultiObjectiveOptimization package.
-
-        Parameters
-        ==========
-
-        """
-        # Get script
-        base_path = "mood/metrics/scripts"
-        if subfolder is not None:
-            base_path = os.path.join(base_path, subfolder)
-
-        script_path = os.path.join(base_path, script_name)
-        with resource_stream(
-            Requirement.parse("MultiObjectiveOptimization"), script_path
-        ) as script_file:
-            script_file = io.TextIOWrapper(script_file)
-
-            # Adjust script name if no_py is True
-            if no_py:
-                script_name = script_name.replace(".py", "")
-
-            # Build the output path
-            if hidden:
-                output_path = os.path.join(output_folder, f".{script_name}")
-            else:
-                output_path = os.path.join(output_folder, script_name)
-
-            # Write the script to the output folder
-            with open(output_path, "w") as sof:
-                for line in script_file:
-                    sof.write(line)
 
     def compute(self, sequences, iteration, folder_name, chain):
 
