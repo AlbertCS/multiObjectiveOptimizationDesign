@@ -6,8 +6,9 @@ import pandas as pd
 
 from mood.metrics import Metric
 
+# singularity exec --bind %pdb_folder%:/pdb docker://proteinphysiologylab/frustratometer:latest /bin/bash -c "sh /script1.sh inicio configurational %license%"
+
 SCRIPT = """#! /bin/bash
-singularity exec --bind %pdb_folder%:/pdb docker://proteinphysiologylab/frustratometer:latest /bin/bash -c "sh /script1.sh inicio configurational %license%"
 singularity exec --bind %pdb_folder%:/pdb docker://proteinphysiologylab/frustratometer:latest /bin/bash -c "sh /script1.sh inicio singleresidue %license%"
 """
 
@@ -44,6 +45,8 @@ class FrustraRMetrics(Metric):
 
         if not os.path.exists(f"{output_folder}/pdb"):
             os.makedirs(f"{output_folder}/pdb")
+        if not os.path.exists(f"{output_folder}/results"):
+            os.makedirs(f"{output_folder}/results")
 
         # Copy the pdbs from the relax folder to the frustration folder
         pdbs = []
@@ -111,51 +114,52 @@ class FrustraRMetrics(Metric):
             raise ValueError("The FrustraR metrics did not run successfully")
 
         # Get the frustration values
-        accu_frustration = {}
-        accu_frst_index = []
+        accu_high_frust_total = []
         for name in names:
-            with open(
-                f"{output_folder}/pdb/{name.replace(".pdb", "")}.done/FrustrationData/{name}_configurational_5adens",
-                "r",
-            ) as file:
-                configurational = pd.read_csv(file, sep=" ")
             with open(
                 f"{output_folder}/pdb/{name.replace(".pdb", "")}.done/FrustrationData/{name}_singleresidue",
                 "r",
             ) as file:
-                frst_index = pd.read_csv(file, sep=" ")
+                singleResidue = pd.read_csv(file, sep=" ")
 
-            frustration = {}
-            # Get if the position is frustrated or not
-            for row in configurational.iterrows():
-                if row[1].iloc[6] > row[1].iloc[7] and row[1].iloc[6] > row[1].iloc[8]:
-                    # frustration.append("High")
-                    frustration[row[1].iloc[1]] = row[1].iloc[6]
-                elif (
-                    row[1].iloc[7] > row[1].iloc[6] and row[1].iloc[7] > row[1].iloc[8]
-                ):
-                    # frustration.append("Neutral")
-                    frustration[row[1].iloc[1]] = 0
+            frustration_type = []
+            accu_high_frust = 0
+            normalize_high_frust = []
+
+            # Define the frustration type and if its highly frustrated make the summation
+            for value in singleResidue["FrstIndex"]:
+                if value > 0.55:
+                    frustration_type.append("MIN")
+                    normalize_high_frust.append(0)
+                elif value < -1:
+                    frustration_type.append("MAX")
+                    normalize_high_frust.append(value + 1)
+                    accu_high_frust += value
                 else:
-                    # frustration.append("Minimal")
-                    frustration[row[1].iloc[1]] = 0
+                    frustration_type.append("NEU")
+                    normalize_high_frust.append(0)
 
-            accu_frustration[name.replace(".pdb", "")] = frustration.copy()
+            aa = singleResidue["AA"]
+            n_res = singleResidue["Res"]
+            df = pd.DataFrame(
+                {
+                    "AA": aa,
+                    "Res": n_res,
+                    "FrstIndex": singleResidue["FrstIndex"],
+                    "FrustrationType": frustration_type,
+                    "NormalizeHighFrustration": normalize_high_frust,
+                }
+            )
 
-            # Get the summation of the positive indexes
-            index = 0
-            for row in frst_index.iterrows():
-                # HighlyFrustratedResidues
-                if row[1].iloc[-1] > 0:
-                    index += row[1].iloc[-1]
-            accu_frst_index.append(index)
+            df.to_csv(
+                f"{output_folder}/results/{name}_singleresidue.csv",
+                index=False,
+            )
+            accu_high_frust_total.append(accu_high_frust)
 
         # Create the dataframe
-        df = pd.DataFrame(accu_frst_index, columns=["HighlyFrustratedIndex"])
+        df = pd.DataFrame(accu_high_frust_total, columns=["HighlyFrustratedSummation"])
 
-        with open(f"{output_folder}/frust.json", "w") as f:
-            json.dump(accu_frustration, f)
-        accu_frustration
         # Add the sequence column
         df["Sequence"] = sequences
 
