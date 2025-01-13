@@ -143,7 +143,7 @@ class FrustraRMetrics(Metric):
                     normalize_high_frust.append(0)
                 elif value < -1:
                     frustration_type.append("MAX")
-                    normalize_high_frust.append(value + 1)
+                    normalize_high_frust.append(abs(value + 1))
                     accu_high_frust += value
                 else:
                     frustration_type.append("NEU")
@@ -159,6 +159,13 @@ class FrustraRMetrics(Metric):
                     "FrustrationType": frustration_type,
                     "NormalizeHighFrustration": normalize_high_frust,
                 }
+            )
+
+            df1 = pd.DataFrame({"Names": names, "Sequence": sequences})
+
+            df1.to_csv(
+                f"{output_folder}/results/equivalences.csv",
+                index=False,
             )
 
             df.to_csv(

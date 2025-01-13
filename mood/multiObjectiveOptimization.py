@@ -212,6 +212,7 @@ class MultiObjectiveOptimization:
                     mutable_aa=self.mutable_aa,
                     eval_mutations=eval_mutations,
                     eval_mutations_params=eval_mutations_params,
+                    folder_name=folder_name,
                 )
 
     def _generate_all_aa_mutable(self):
@@ -242,7 +243,7 @@ class MultiObjectiveOptimization:
         mutable_aa = {}
         for chain in self.chains:
             mutable_aa[chain] = {}
-            for i in range(0, len(seq_chains[chain][0])):
+            for i in range(0, len(seq_chains[chain])):
                 mutable_aa[chain][i] = all_aa
         return mutable_aa
 
@@ -254,6 +255,10 @@ class MultiObjectiveOptimization:
             chain.id: [seq1("".join(residue.resname for residue in chain))]
             for chain in structure.get_chains()
         }
+        # Delete non-canonical amino acids
+        for chain in self.chains:
+            if chain in chains:
+                chains[chain] = chains[chain][0].replace("X", "")
         return chains
 
     def setup_folders_initial(self):
@@ -557,6 +562,13 @@ class MultiObjectiveOptimization:
                                 generate_initial_seq=generate_initial_seq,
                             )
                         )
+
+                        # Remove the fixed positions from the mutations_probabilities
+                        if self.fixed_positions:
+                            for pos in self.fixed_positions[chain]:
+                                if pos in self.mutations_probabilities[chain]:
+                                    self.mutations_probabilities[chain].pop(pos)
+
                         self.starting_sequences = {}
                         self.starting_sequences[chain] = seq_proteinmpnn
 
@@ -593,6 +605,7 @@ class MultiObjectiveOptimization:
                             chain=chain,
                             current_iteration=self.current_iteration,
                             mutations_probabilities=self.mutations_probabilities,
+                            folder_name=self.folder_name,
                         )
                     )
 

@@ -4,6 +4,7 @@ import random
 from typing import Any, Dict
 
 import numpy as np
+import pandas as pd
 
 from mood.base.log import Logger
 from mood.base.sequence import Sequence
@@ -26,6 +27,7 @@ class GeneticAlgorithm(Optimizer):
         mutation_iterations=1,
         max_mutation_per_iteration=1,
         min_mutation_per_iteration=1,
+        folder_name=None,
     ) -> None:
         super().__init__(
             population_size=population_size,
@@ -48,6 +50,7 @@ class GeneticAlgorithm(Optimizer):
         self.cycle_length = self.crossover_iterations + self.mutation_iterations
         self.max_mutation_per_iteration = max_mutation_per_iteration
         self.min_mutation_per_iteration = min_mutation_per_iteration
+        self.folder_name = folder_name
 
         self.eval_mutations = eval_mutations
         self.eval_mutations_params = eval_mutations_params
@@ -571,6 +574,33 @@ class GeneticAlgorithm(Optimizer):
 
     # TODO implement the following sort: https://github.com/smkalami/nsga2-in-python/blob/main/nsga2.py
 
+    def add_frustrationBias_to_mutations(self, sequence_to_mutate):
+
+        frustrar_folder = (
+            f"{self.folder_name}/{str(self.current_iteration).zfill(3)}/frustrar"
+        )
+        # if the frustration calculation exists, add the frustration bias to the mutations
+        if os.path.exists(frustrar_folder):
+            equivalence_file = f"{frustrar_folder}/results/equivalences.csv"
+            equivalences = pd.read_csv(equivalence_file)
+            name = equivalences.loc[equivalences["Sequence"] == sequence_to_mutate][
+                "Names"
+            ]
+
+            single_frst = pd.read_csv(
+                f"{frustrar_folder}/results/{name[0]}_singleresidue.csv"
+            )
+
+            frst_index = single_frst["FrstIndex"]
+            # Normalize the values of frst index, so they go between 0 and 1
+            frst_index = 1 - (frst_index - frst_index.min()) / (
+                frst_index.max() - frst_index.min()
+            )
+        else:
+            frst_index = [1] * len(sequence_to_mutate)
+
+        return list(frst_index)
+
     def generate_mutation_sequence(
         self,
         chain,
@@ -581,10 +611,22 @@ class GeneticAlgorithm(Optimizer):
     ):
         sequence_to_mutate_list = list(sequence_to_mutate)
         mut = []
+
+        mutable_positions = list(self.mutable_aa[chain].keys())
+        # generate a list of 1 for each mutable position
+
+        mutable_positions_probability = self.add_frustrationBias_to_mutations(
+            mutations_probabilities,
+            chain,
+            sequence_to_mutate,
+        )
+
         if self.mutable_aa == {}:
             raise ValueError("No mutable amino acids provided")
         for _ in range(self.rng.choice(list(range(min_mutations, max_mutations + 1)))):
-            position = self.rng.choice(list(self.mutable_aa[chain].keys()))
+            position = self.rng.choices(
+                mutable_positions, mutable_positions_probability, k=1
+            )[0]
             if mutations_probabilities is None:
                 new_aa = self.rng.choice(self.mutable_aa[chain][position])
             else:
@@ -765,6 +807,7 @@ class GeneticAlgorithm(Optimizer):
         current_iteration=None,
         mutations_probabilities=None,
     ):
+        self.current_iteration = current_iteration
         child_sequences = []
         sequences_to_add = []
         mutations = []
