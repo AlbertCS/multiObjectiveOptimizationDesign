@@ -13,6 +13,10 @@ class Metric:
     def setup_iterations_inputs(self):
         pass
 
+    @abstractmethod
+    def clean(self):
+        pass
+
     @property
     def state(self):
         return self._state

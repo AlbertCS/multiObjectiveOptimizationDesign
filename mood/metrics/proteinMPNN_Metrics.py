@@ -41,6 +41,13 @@ class ProteinMPNNMetrics(Metric):
     def objectives(self):
         return self._objectives
 
+    def clean(self, folder_name, iteration, max_iteration):
+        mpnn_folder = f"{folder_name}/{str(iteration).zfill(3)}/mpnn"
+        if os.path.exists(mpnn_folder):
+            for file in os.listdir(mpnn_folder):
+                if file.endswith(".fasta"):
+                    os.remove(f"{mpnn_folder}/{file}")
+
     def compute(self, sequences, iteration, folder_name, chain):
 
         # Create df

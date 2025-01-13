@@ -31,6 +31,16 @@ class FrustraRMetrics(Metric):
     def objectives(self):
         return self._objectives
 
+    def clean(self, folder_name, iteration, max_iteration):
+        # Clean frustration
+        if iteration != 0 and iteration != max_iteration:
+            frustrar_folder = f"{folder_name}/{str(iteration).zfill(3)}/frustrar"
+            if os.path.exists(frustrar_folder):
+                for root, dirs, files in os.walk(f"{frustrar_folder}/pdb"):
+                    for file in files:
+                        if file.endswith(".pdb"):
+                            os.remove(os.path.join(root, file))
+
     def compute(self, sequences, iteration, folder_name, chain=None):
 
         # Create df

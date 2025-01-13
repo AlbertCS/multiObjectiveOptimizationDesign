@@ -471,22 +471,6 @@ class MultiObjectiveOptimization:
         self.population_size = info["population_size"]
         self.mutations_probabilities = info["mutation_probabilities"]
 
-    def clean_metrics(self, folder_name, iteration):
-        # Clean pyrosetta
-        relax_folder = f"{folder_name}/{str(iteration).zfill(3)}/relax"
-        if os.path.exists(relax_folder):
-            for file in os.listdir(relax_folder):
-                if file.endswith(".pdb") or file.endswith(".pdb.gz"):
-                    os.remove(f"{relax_folder}/{file}")
-
-        # Clean frustration
-        frustrar_folder = f"{folder_name}/{str(iteration).zfill(3)}/frustrar"
-        if os.path.exists(frustrar_folder):
-            for root, dirs, files in os.walk(f"{frustrar_folder}/pdb"):
-                for file in files:
-                    if file.endswith(".pdb"):
-                        os.remove(os.path.join(root, file))
-
     def run(self):
 
         # Run the optimization process
@@ -645,7 +629,13 @@ class MultiObjectiveOptimization:
 
                 # Clean the unnecessary metric results
                 # Delete the pdb files
-                # self.clean_metrics(self.folder_name, self.current_iteration)
+                for metric in self.metrics:
+                    self.logger.info(f"Cleaning {metric.name} ...")
+                    metric.clean(
+                        folder_name=self.folder_name,
+                        current_iteration=self.current_iteration,
+                        max_iterations=self.max_iteration,
+                    )
 
                 # Evaluate the population and rank the individuals
                 self.logger.info("Evaluating and ranking the population")

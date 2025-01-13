@@ -86,6 +86,13 @@ class RosettaMetrics(Metric):
                 for line in script_file:
                     sof.write(line)
 
+    def clean(self, folder_name, iteration, max_iteration):
+        relax_folder = f"{folder_name}/{str(iteration).zfill(3)}/relax"
+        if os.path.exists(relax_folder):
+            for file in os.listdir(relax_folder):
+                if file.endswith(".pdb") or file.endswith(".pdb.gz"):
+                    os.remove(f"{relax_folder}/{file}")
+
     def compute(self, sequences, iteration, folder_name, chain):
 
         # Create df
