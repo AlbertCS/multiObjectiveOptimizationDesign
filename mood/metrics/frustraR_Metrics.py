@@ -9,7 +9,7 @@ from mood.metrics import Metric
 # singularity exec --bind %pdb_folder%:/pdb docker://proteinphysiologylab/frustratometer:latest /bin/bash -c "sh /script1.sh inicio configurational %license%"
 
 SCRIPT = """#! /bin/bash
-singularity exec --bind %pdb_folder%:/pdb docker://proteinphysiologylab/frustratometer:latest /bin/bash -c "sh /script1.sh inicio singleresidue %license%"
+singularity exec --bind %pdb_folder%:/pdb %docker_image% /bin/bash -c "sh /script1.sh inicio singleresidue %license%"
 """
 
 
@@ -17,6 +17,7 @@ class FrustraRMetrics(Metric):
     def __init__(
         self,
         license_key,
+        docker_image="proteinphysiologylab/frustratometer:latest",
     ):
         super().__init__()
         self.state = {
@@ -26,6 +27,7 @@ class FrustraRMetrics(Metric):
         self._objectives = ["HighlyFrustratedSummation"]
         self.name = "frustraRMetrics"
         self.license_key = license_key
+        self.docker_image = docker_image
 
     @property
     def objectives(self):
@@ -96,6 +98,7 @@ class FrustraRMetrics(Metric):
         script_value = SCRIPT
         script_value = script_value.replace("%pdb_folder%", f"{output_folder}/pdb")
         script_value = script_value.replace("%license%", self.license_key)
+        script_value = script_value.replace("%docker_image%", self.docker_image)
         with open(f"{output_folder}/frustra.sh", "w") as file:
             file.write(script_value)
 

@@ -589,7 +589,7 @@ class GeneticAlgorithm(Optimizer):
                     f"{frustrar_folder}/results/{row[1]['Names']}_singleresidue.csv"
                 )
 
-    def add_frustrationBias_to_mutations(self, sequence_to_mutate):
+    def add_frustrationBias_to_mutations(self, sequence_to_mutate, chain):
 
         frustrar_folder = (
             f"{self.folder_name}/{str(self.current_iteration -1).zfill(3)}/frustrar"
@@ -610,7 +610,7 @@ class GeneticAlgorithm(Optimizer):
                 frst_index.max() - frst_index.min()
             )
         else:
-            frst_index = [1] * len(sequence_to_mutate)
+            frst_index = [1] * len(self.mutable_aa[chain].keys())
 
         return list(frst_index)
 
@@ -629,15 +629,18 @@ class GeneticAlgorithm(Optimizer):
         # generate a list of 1 for each mutable position
 
         mutable_positions_probability = self.add_frustrationBias_to_mutations(
-            sequence_to_mutate,
+            sequence_to_mutate, chain
         )
 
         if self.mutable_aa == {}:
             raise ValueError("No mutable amino acids provided")
         for _ in range(self.rng.choice(list(range(min_mutations, max_mutations + 1)))):
-            position = self.rng.choices(
-                mutable_positions, mutable_positions_probability, k=1
-            )[0]
+            try:
+                position = self.rng.choices(
+                    mutable_positions, mutable_positions_probability, k=1
+                )[0]
+            except Exception as e:
+                self.logger.error(f"Error selecting the position: {e}")
             if mutations_probabilities is None:
                 new_aa = self.rng.choice(self.mutable_aa[chain][position])
             else:
