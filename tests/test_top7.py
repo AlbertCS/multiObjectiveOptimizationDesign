@@ -4,6 +4,7 @@ import shutil
 import unittest
 
 from mood.base.data import AlgorithmDataSingleton
+from mood.metrics.frustraR_Metrics import FrustraRMetrics
 from mood.metrics.proteinMPNN_Metrics import ProteinMPNNMetrics
 from mood.metrics.pyrosetta_Metrics import RosettaMetrics
 from mood.multiObjectiveOptimization import MultiObjectiveOptimization
@@ -17,6 +18,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         optimizer = "genetic_algorithm"
         cpus = 4
         native_pdb = f"{data_path}/1QYS.pdb"
+        license_key = "MODELIRANJE"
 
         metrics = [
             RosettaMetrics(
@@ -26,6 +28,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
                 native_pdb=native_pdb,
             ),
             ProteinMPNNMetrics(seed=1235, native_pdb=native_pdb),
+            FrustraRMetrics(license_key=license_key),
         ]
         debug = True
         max_iteration = 50

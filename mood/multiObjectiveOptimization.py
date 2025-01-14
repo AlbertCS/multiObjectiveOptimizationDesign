@@ -147,9 +147,7 @@ class MultiObjectiveOptimization:
             with open(starting_sequences, "rb") as f:
                 self.starting_sequences = pickle.load(f)
 
-        if mutable_aa is None:
-            self.mutable_aa = self._generate_all_aa_mutable()
-        else:
+        if mutable_aa is not None:
             if offset is None:
                 self.mutable_aa = mutable_aa
             else:
@@ -161,6 +159,9 @@ class MultiObjectiveOptimization:
         if mutation_probability:
             self.mutations_probabilities = mutations_probabilities
             self.mutation_probability = mutation_probability
+            self.mutable_aa = self._generate_all_aa_mutable()
+
+        if self.mutable_aa is None:
             self.mutable_aa = self._generate_all_aa_mutable()
 
         self.recombination_with_mutation = recombination_with_mutation
@@ -243,22 +244,51 @@ class MultiObjectiveOptimization:
         mutable_aa = {}
         for chain in self.chains:
             mutable_aa[chain] = {}
-            for i in range(0, len(seq_chains[chain])):
+            for i in range(0, len(seq_chains[chain][0])):
                 mutable_aa[chain][i] = all_aa
         return mutable_aa
 
     def _get_seq_from_pdb(self, structure_id="initial_structure", pdb_file=None):
 
+        three_aa = [
+            "ALA",
+            "ARG",
+            "ASN",
+            "ASP",
+            "ASX",
+            "CYS",
+            "GLU",
+            "GLN",
+            "GLX",
+            "GLY",
+            "HIS",
+            "ILE",
+            "LEU",
+            "LYS",
+            "MET",
+            "PHE",
+            "SER",
+            "THR",
+            "TRP",
+            "TYR",
+            "VAL",
+            "MSE",
+        ]
+        three_not_aa = ["HOH", "HCA", "FAD"]
         parser = PDBParser()
         structure = parser.get_structure(structure_id, pdb_file)
         chains = {
-            chain.id: [seq1("".join(residue.resname for residue in chain))]
+            chain.id: [
+                seq1(
+                    "".join(
+                        residue.resname
+                        for residue in chain
+                        if residue.resname not in three_not_aa
+                    )
+                )
+            ]
             for chain in structure.get_chains()
         }
-        # Delete non-canonical amino acids
-        for chain in self.chains:
-            if chain in chains:
-                chains[chain] = chains[chain][0].replace("X", "")
         return chains
 
     def setup_folders_initial(self):
@@ -605,7 +635,6 @@ class MultiObjectiveOptimization:
                             chain=chain,
                             current_iteration=self.current_iteration,
                             mutations_probabilities=self.mutations_probabilities,
-                            folder_name=self.folder_name,
                         )
                     )
 
@@ -646,8 +675,8 @@ class MultiObjectiveOptimization:
                     self.logger.info(f"Cleaning {metric.name} ...")
                     metric.clean(
                         folder_name=self.folder_name,
-                        current_iteration=self.current_iteration,
-                        max_iterations=self.max_iteration,
+                        iteration=self.current_iteration,
+                        max_iteration=self.max_iteration,
                     )
 
                 # Evaluate the population and rank the individuals
