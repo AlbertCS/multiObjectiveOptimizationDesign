@@ -51,7 +51,7 @@ class GeneticAlgorithm(Optimizer):
         self.max_mutation_per_iteration = max_mutation_per_iteration
         self.min_mutation_per_iteration = min_mutation_per_iteration
         self.folder_name = folder_name
-
+        self.sequence_to_file_frst = {}
         self.eval_mutations = eval_mutations
         self.eval_mutations_params = eval_mutations_params
 
@@ -574,22 +574,35 @@ class GeneticAlgorithm(Optimizer):
 
     # TODO implement the following sort: https://github.com/smkalami/nsga2-in-python/blob/main/nsga2.py
 
-    def add_frustrationBias_to_mutations(self, sequence_to_mutate):
-
+    def add_frustration_files(
+        self,
+    ):
         frustrar_folder = (
-            f"{self.folder_name}/{str(self.current_iteration).zfill(3)}/frustrar"
+            f"{self.folder_name}/{str(self.current_iteration -1).zfill(3)}/frustrar"
         )
-        # if the frustration calculation exists, add the frustration bias to the mutations
         if os.path.exists(frustrar_folder):
             equivalence_file = f"{frustrar_folder}/results/equivalences.csv"
             equivalences = pd.read_csv(equivalence_file)
-            name = equivalences.loc[equivalences["Sequence"] == sequence_to_mutate][
-                "Names"
-            ]
+            # Save the equivalences
+            for row in equivalences.iterrows():
+                self.sequence_to_file_frst[row[1]["Sequence"]] = (
+                    f"{frustrar_folder}/results/{row[1]['Names']}_singleresidue.csv"
+                )
 
-            single_frst = pd.read_csv(
-                f"{frustrar_folder}/results/{name[0]}_singleresidue.csv"
-            )
+    def add_frustrationBias_to_mutations(self, sequence_to_mutate):
+
+        frustrar_folder = (
+            f"{self.folder_name}/{str(self.current_iteration -1).zfill(3)}/frustrar"
+        )
+        # if the frustration calculation exists, add the frustration bias to the mutations
+        if os.path.exists(frustrar_folder):
+
+            if sequence_to_mutate in self.sequence_to_file_frst.keys():
+                single_frst = pd.read_csv(
+                    self.sequence_to_file_frst[sequence_to_mutate]
+                )
+            else:
+                self.logger.error("No name found for the sequence")
 
             frst_index = single_frst["FrstIndex"]
             # Normalize the values of frst index, so they go between 0 and 1
@@ -813,6 +826,8 @@ class GeneticAlgorithm(Optimizer):
         n_seqs_added = 0
         cycle_pos = current_iteration % self.cycle_length
 
+        self.add_frustration_files()
+
         if cycle_pos < self.crossover_iterations:
             self.logger.info(f"Iteration {current_iteration} - Crossover")
             general_attempt = 0
@@ -875,6 +890,7 @@ class GeneticAlgorithm(Optimizer):
             while len(child_sequences) < self.population_size:
                 seq_index = self.data.nsequences(chain)
                 sequence_to_start_from = self.rng.choice(parent_sequences)
+                self.parent_sequences = parent_sequences
                 child_sequence, mut = self.generate_mutation_sequence(
                     chain=chain,
                     sequence_to_mutate=sequence_to_start_from,
