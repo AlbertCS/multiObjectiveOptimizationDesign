@@ -17,7 +17,7 @@ class FrustraRMetrics(Metric):
     def __init__(
         self,
         license_key,
-        docker_image="proteinphysiologylab/frustratometer:latest",
+        docker_image="docker://proteinphysiologylab/frustratometer:latest",
     ):
         super().__init__()
         self.state = {
