@@ -616,8 +616,6 @@ class GeneticAlgorithm(Optimizer):
         # generate a list of 1 for each mutable position
 
         mutable_positions_probability = self.add_frustrationBias_to_mutations(
-            mutations_probabilities,
-            chain,
             sequence_to_mutate,
         )
 
