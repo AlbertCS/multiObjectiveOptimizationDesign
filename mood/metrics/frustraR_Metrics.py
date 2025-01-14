@@ -20,10 +20,10 @@ class FrustraRMetrics(Metric):
     ):
         super().__init__()
         self.state = {
-            "HighlyFrustratedIndex": "negative",
+            "HighlyFrustratedSummation": "negative",
         }
         # This score is the summation of the highly frustrated residues (residues with positive energy)
-        self._objectives = ["FrustrationTotal"]
+        self._objectives = ["HighlyFrustratedSummation"]
         self.name = "frustraRMetrics"
         self.license_key = license_key
 
