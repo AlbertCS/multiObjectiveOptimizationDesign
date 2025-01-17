@@ -301,8 +301,12 @@ class MultiObjectiveOptimization:
         if not os.path.exists(self.folder_name + "/input"):
             os.mkdir(self.folder_name + "/input")
         self.folders["input"] = self.folder_name + "/input"
-
         shutil.copy(self.native_pdb, self.folders["input"])
+
+        if not os.path.exists(self.folder_name + "/input/scafold"):
+            os.mkdir(self.folder_name + "/input/scafold")
+        self.folders["scafold"] = self.folder_name + "/input/scafold"
+        shutil.copy(self.pdb_scafold, self.folders["scafold"])
 
     def check_Iter_finished(self, iteration, sequences_pkl, dataframe_pkl):
         """

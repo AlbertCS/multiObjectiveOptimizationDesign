@@ -32,7 +32,7 @@ def mutation_probabilities_calculation_proteinMPNN(
         path_for_fixed_positions = f"{out_folder}/fixed_positions.json"
 
         main_parse_multiple_chains(
-            input_path=f"{folder_name}/input",
+            input_path=f"{folder_name}/input/scafold",
             output_path=path_for_parsed_pdbs,
         )
 

@@ -18,6 +18,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         params = f"{data_path}/params"
         cpus = 4
         native_pdb = f"{data_path}/AF-A0A9E4RQT2@HFFCA@146.pdb"
+        pdb_scafold = f"{data_path}/A0A9E4RQT2.pdb"
         fixed_positions = f"{data_path}/pocket_residues.json"
 
         metrics = [
@@ -29,7 +30,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
                 ligand_chain="L",
             ),
             ProteinMPNNMetrics(
-                seed=1235, native_pdb=native_pdb, fixed_positions=fixed_positions
+                seed=1235, native_pdb=pdb_scafold, fixed_positions=fixed_positions
             ),
         ]
         debug = True
@@ -55,6 +56,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             debug=debug,
             max_iteration=max_iteration,
             native_pdb=native_pdb,
+            pdb_scafold=pdb_scafold,
             chains=chains,
             data=data,
             folder_name=folder_name,
