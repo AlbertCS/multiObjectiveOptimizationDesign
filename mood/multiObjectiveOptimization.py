@@ -98,6 +98,7 @@ class MultiObjectiveOptimization:
         max_iteration: int = 100,
         seed=12345,
         native_pdb=None,
+        pdb_scafold=None,
         chains="A",
         data=None,
         mutation_rate=None,
@@ -121,6 +122,7 @@ class MultiObjectiveOptimization:
         self.seed = seed
         random.seed(seed)
         self.native_pdb = native_pdb
+        self.pdb_scafold = pdb_scafold
         self.chains = chains
         if data is None:
             self.data = AlgorithmDataSingleton()
@@ -585,7 +587,7 @@ class MultiObjectiveOptimization:
                             mutation_probabilities_calculation_proteinMPNN(
                                 chain=chain,
                                 folder_name=self.folder_name,
-                                native_pdb=self.native_pdb,
+                                native_pdb=self.pdb_scafold,
                                 seed=self.seed,
                                 population_size=self.population_size,
                                 fixed_positions=self.fixed_positions,
