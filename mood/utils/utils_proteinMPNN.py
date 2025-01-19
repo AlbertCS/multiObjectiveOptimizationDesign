@@ -68,7 +68,7 @@ def mutation_probabilities_calculation_proteinMPNN(
                 fixed_positions_jsonl=path_for_fixed_positions,
                 out_folder=out_folder,
                 seed=seed,
-                num_seq_per_target=population_size,
+                num_seq_per_target=population_size - 1,
                 sampling_temp="0.3",
                 suppress_print=True,
             )
@@ -92,7 +92,7 @@ def mutation_probabilities_calculation_proteinMPNN(
                 pdb_path_chains=chain,
                 out_folder=out_folder,
                 seed=seed,
-                num_seq_per_target=population_size,
+                num_seq_per_target=population_size - 1,
                 sampling_temp="0.3",
                 save_probs=True,
                 suppress_print=True,
