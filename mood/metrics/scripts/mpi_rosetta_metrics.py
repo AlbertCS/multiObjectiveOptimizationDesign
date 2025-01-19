@@ -21,13 +21,14 @@ class Mpi_relax:
 
         counter = 0
         dE = {}
-        while not jd.job_complete:
-            counter += 1
-            energy_ini = sfxn(test_pose)
-            fastrelax_mover.apply(test_pose)
-            energy_final = sfxn(test_pose)
-            dE[counter] = energy_final - energy_ini
-            jd.output_decoy(test_pose)
+        # while not jd.job_complete:
+        counter += 1
+        energy_ini = sfxn(test_pose)
+        fastrelax_mover.apply(test_pose)
+        energy_final = sfxn(test_pose)
+        dE[counter] = energy_final - energy_ini
+        test_pose.dump_pdb(f"{jd}.pdb")
+        # jd.output_decoy(test_pose)
 
         energy = [float(x) for x in dE.values()]
         if not dE:
@@ -35,7 +36,7 @@ class Mpi_relax:
         if len(energy) == 0:
             raise ValueError("No energy values found")
 
-        mean_energy = sum(energy) / len(energy)
+        # mean_energy = sum(energy) / len(energy)
 
         return test_pose, energy_final
 
@@ -330,18 +331,20 @@ class Mpi_relax:
         distances_res = []
         # Each processor relaxes its assigned sequences
         for i in range(start_index, end_index):
-            jd = prs.PyJobDistributor(
-                f"{output_folder}/decoy_R{rank}_I{i}",
-                nstruct=1,
-                scorefxn=sfxn_scorer,
-                compress=False,
-            )
+            # jd = prs.PyJobDistributor(
+            #     f"{output_folder}/decoy_R{rank}_I{i}",
+            #     nstruct=1,
+            #     scorefxn=sfxn_scorer,
+            #     compress=False,
+            # )
+
+            name = f"{output_folder}/decoy_R{rank}_I{i}"
             # Get the mutated sequence translated to a pose
             pose = self.mutate_native_pose(native_pose, sequences[i])
             # Relax the pose
             test_pose, mean_energy = self.relax_sequence(
                 pose=pose,
-                jd=jd,
+                jd=name,
                 fastrelax_mover=fastrelax_mover,
                 sfxn=sfxn_scorer,
             )
