@@ -21,7 +21,7 @@ class FrustraRMetrics(Metric):
     ):
         super().__init__()
         self.state = {
-            "HighlyFrustratedSummation": "negative",
+            "HighlyFrustratedSummation": "positive",
         }
         # This score is the summation of the highly frustrated residues (residues with positive energy)
         self._objectives = ["HighlyFrustratedSummation"]
