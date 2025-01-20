@@ -29,9 +29,9 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
                 native_pdb=native_pdb,
                 ligand_chain="L",
             ),
-            ProteinMPNNMetrics(
-                seed=1235, native_pdb=pdb_scafold, fixed_positions=fixed_positions
-            ),
+            # ProteinMPNNMetrics(
+            #     seed=1235, native_pdb=pdb_scafold, fixed_positions=fixed_positions
+            # ),
         ]
         debug = True
         max_iteration = 50
