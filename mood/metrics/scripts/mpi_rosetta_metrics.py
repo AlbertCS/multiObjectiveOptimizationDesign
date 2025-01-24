@@ -473,8 +473,11 @@ class Mpi_relax:
                     df = df.merge(df_distances, left_on="Index", right_index=True)
 
                 df.to_csv(f"{output_folder}/rosetta_scores.csv", index=False)
+
+                exit(0)
             except Exception as e:
                 print(f"Error in rank 0: {e}")
+                exit(1)
 
 
 import argparse
