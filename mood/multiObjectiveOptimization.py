@@ -122,7 +122,10 @@ class MultiObjectiveOptimization:
         self.seed = seed
         random.seed(seed)
         self.native_pdb = native_pdb
-        self.pdb_scafold = pdb_scafold
+        if pdb_scafold is None:
+            self.pdb_scafold = native_pdb
+        else:
+            self.pdb_scafold = pdb_scafold
         self.chains = chains
         if data is None:
             self.data = AlgorithmDataSingleton()
