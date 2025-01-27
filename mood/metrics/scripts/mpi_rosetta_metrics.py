@@ -255,180 +255,188 @@ class Mpi_relax:
         sequences = []
         # Open the file in read mode
         try:
-            with open(sequences_file, "r") as file:
-                # Read the contents of the file
-                lines = file.readlines()
-                # Iterate over each line
-                for line in lines:
-                    # Strip any leading/trailing whitespace and add to the list
-                    sequences.append(line.strip())
-        except Exception as e:
-            print("Error reading the sequence file")
-            raise (ValueError(f"Error reading the sequence file: {e}"))
+            try:
+                with open(sequences_file, "r") as file:
+                    # Read the contents of the file
+                    lines = file.readlines()
+                    # Iterate over each line
+                    for line in lines:
+                        # Strip any leading/trailing whitespace and add to the list
+                        sequences.append(line.strip())
+            except Exception as e:
+                print("Error reading the sequence file")
+                raise (ValueError(f"Error reading the sequence file: {e}"))
 
-        # Initialize native pose
-        try:
-            native_pose = prs.pyrosetta.pose_from_pdb(native_pdb)
-        except:
-            print("Error reading the native pdb")
-            raise (ValueError("Error reading the native pdb"))
+            # Initialize native pose
+            try:
+                native_pose = prs.pyrosetta.pose_from_pdb(native_pdb)
+            except:
+                print("Error reading the native pdb")
+                raise (ValueError("Error reading the native pdb"))
 
-        try:
-            if distance_dict != "None" and distance_dict is not None:
-                # Get the distances dictionary
-                for key, value in distances.items():
-                    if len(value[0]) == 3:
-                        natom1 = native_pose.pdb_info().pdb2pose(
-                            value[0][0], value[0][1]
-                        )
-                        natom2 = native_pose.pdb_info().pdb2pose(
-                            value[1][0], value[1][1]
-                        )
-                        distances[key] = [(natom1, value[0][2]), (natom2, value[1][2])]
-        except Exception as e:
-            print("Error reading the distance file")
-            raise (ValueError(f"Error reading the distance file: {e}"))
+            try:
+                if distance_dict != "None" and distance_dict is not None:
+                    # Get the distances dictionary
+                    for key, value in distances.items():
+                        if len(value[0]) == 3:
+                            natom1 = native_pose.pdb_info().pdb2pose(
+                                value[0][0], value[0][1]
+                            )
+                            natom2 = native_pose.pdb_info().pdb2pose(
+                                value[1][0], value[1][1]
+                            )
+                            distances[key] = [
+                                (natom1, value[0][2]),
+                                (natom2, value[1][2]),
+                            ]
+            except Exception as e:
+                print("Error reading the distance file")
+                raise (ValueError(f"Error reading the distance file: {e}"))
 
-        # Initialize score function and relax mover
-        sfxn = prs.rosetta.core.scoring.ScoreFunctionFactory.create_score_function(
-            "ref2015"
-        )
-        sfxn_scorer = (
-            prs.rosetta.core.scoring.ScoreFunctionFactory.create_score_function(
+            # Initialize score function and relax mover
+            sfxn = prs.rosetta.core.scoring.ScoreFunctionFactory.create_score_function(
                 "ref2015"
             )
-        )
-
-        # Apply constraints to the energy function
-        try:
-            if cst_file != "None" and cst_file is not None:
-                sfxn.set_weight(rosetta.core.scoring.ScoreType.res_type_constraint, 1)
-                # Define catalytic constraints
-                set_constraints = (
-                    rosetta.protocols.constraint_movers.ConstraintSetMover()
+            sfxn_scorer = (
+                prs.rosetta.core.scoring.ScoreFunctionFactory.create_score_function(
+                    "ref2015"
                 )
-                # Add constraint file
-                set_constraints.constraint_file(cst_file)
-                # Add atom_pair_constraint_weight ScoreType
-                sfxn.set_weight(
-                    rosetta.core.scoring.ScoreType.atom_pair_constraint,
-                    atom_pair_constraint_weight,
-                )
-                # Turn on constraint with the mover
-                set_constraints.add_constraints(True)
-                set_constraints.apply(native_pose)
-        except Exception as e:
-            print("Error reading the constraints file")
-            raise (ValueError(f"Error reading the constraints file: {e}"))
-
-        # Initialize the fastRelax mover
-        try:
-            fastrelax_mover = prs.rosetta.protocols.relax.FastRelax()
-            fastrelax_mover.set_scorefxn(sfxn)
-
-            # Initialize filters and calculators
-            # initialize hydrophobic surface calculator
-            hydro_filter = (
-                prs.rosetta.protocols.denovo_design.filters.ExposedHydrophobicsFilter()
-            )
-            hydro_filter.set_sasa_cutoff(0)
-            hydro_filter.set_threshold(-1)
-            # initialize Salt bridge calculator
-            salt_bridges_calculator = (
-                prs.rosetta.protocols.pose_metric_calculators.SaltBridgeCalculator()
             )
 
-            # Distribute sequences equally among processors
-            num_sequences = len(sequences)
-            sequences_per_proc = num_sequences // size
-            remainder = num_sequences % size
-            start_index = rank * sequences_per_proc + min(rank, remainder)
-            end_index = (
-                start_index + sequences_per_proc + (1 if rank < remainder else 0)
-            )
-        except Exception as e:
-            print("Error initializing the calculators")
-            raise (ValueError(f"Error initializing the calculators: {e}"))
-
-        # Initialize all the datastructures
-        relaxed_energies = []
-        interface_scores = []
-        apo_scores = []
-        hydrophobic_scores = []
-        n_salt_bridges_iter = []
-        distances_res = []
-        # Each processor relaxes its assigned sequences
-        try:
-            print(
-                f"Rank {rank} is relaxing sequences from {start_index} to {end_index}"
-            )
-            for i in range(start_index, end_index):
-                jd = prs.PyJobDistributor(
-                    f"{output_folder}/decoy_R{rank}_I{i}",
-                    nstruct=1,
-                    scorefxn=sfxn_scorer,
-                    compress=False,
-                )
-
-                # name = f"{output_folder}/decoy_R{rank}_I{i}"
-                # Get the mutated sequence translated to a pose
-                pose = self.mutate_native_pose(native_pose, sequences[i])
-                # Relax the pose
-                test_pose, mean_energy = self.relax_sequence(
-                    pose=pose,
-                    jd=jd,
-                    fastrelax_mover=fastrelax_mover,
-                    sfxn=sfxn_scorer,
-                )
-                if ligand_chain != "None" and ligand_chain is not None:
-                    # Get the apo score
-                    apo_score = self.calculate_Apo_Score(
-                        test_pose, sfxn_scorer, ligand_chain
-                    )
-                    # Get the binding score
-                    interface_score = self.calculate_Interface_Score(
-                        test_pose, sfxn_scorer, ligand_chain
-                    )
-                # Apply the hydrophobic filter and get the score
-                hydro_filter.apply(test_pose)
-                hydrophobic_score = hydro_filter.compute(test_pose)
-                # Calculate the salt bridges
-                n_salt_bridges = salt_bridges_calculator.get(
-                    key="salt_bridge", this_pose=test_pose
-                )
-                # Calculate the distances
-                if distance_dict != "None" and distance_dict is not None:
-                    res_distance = distance_dict.copy()
-                    for key, value in distance_dict.items():
-                        res_distance[key] = self.distance(test_pose, value[0], value[1])
-                # n_salt_bidges = self.get_salt_bridges(f"{job_output}_R{rank}_I{i}_0.pdb", "pdb")
-
-                # Gather results
-                relaxed_energies.append((i, mean_energy))
-                if ligand_chain != "None" and ligand_chain is not None:
-                    interface_scores.append((i, interface_score))
-                    apo_scores.append((i, apo_score))
-                hydrophobic_scores.append((i, hydrophobic_score))
-                n_salt_bridges_iter.append((i, n_salt_bridges))
-                if distance_dict != "None" and distance_dict is not None:
-                    distances_res.append((i, res_distance))
-
-            # Gather results from all processors
-            all_relaxed_energies = comm.gather(relaxed_energies, root=0)
-            if ligand_chain != "None" and ligand_chain is not None:
-                all_interface_scores = comm.gather(interface_scores, root=0)
-                all_apo_scores = comm.gather(apo_scores, root=0)
-            all_hydrophobic_scores = comm.gather(hydrophobic_scores, root=0)
-            all_salt_bridges = comm.gather(n_salt_bridges_iter, root=0)
-            if distance_dict != "None" and distance_dict is not None:
-                all_distances_res = comm.gather(distances_res, root=0)
-        except Exception as e:
-            print("Error in the main loop of the relaxation")
-            raise (ValueError(f"Error in the main loop of the relaxation: {e}"))
-
-        # If rank 0, process the gathered results
-        if rank == 0:
+            # Apply constraints to the energy function
             try:
+                if cst_file != "None" and cst_file is not None:
+                    sfxn.set_weight(
+                        rosetta.core.scoring.ScoreType.res_type_constraint, 1
+                    )
+                    # Define catalytic constraints
+                    set_constraints = (
+                        rosetta.protocols.constraint_movers.ConstraintSetMover()
+                    )
+                    # Add constraint file
+                    set_constraints.constraint_file(cst_file)
+                    # Add atom_pair_constraint_weight ScoreType
+                    sfxn.set_weight(
+                        rosetta.core.scoring.ScoreType.atom_pair_constraint,
+                        atom_pair_constraint_weight,
+                    )
+                    # Turn on constraint with the mover
+                    set_constraints.add_constraints(True)
+                    set_constraints.apply(native_pose)
+            except Exception as e:
+                print("Error reading the constraints file")
+                raise (ValueError(f"Error reading the constraints file: {e}"))
+
+            # Initialize the fastRelax mover
+            try:
+                fastrelax_mover = prs.rosetta.protocols.relax.FastRelax()
+                fastrelax_mover.set_scorefxn(sfxn)
+
+                # Initialize filters and calculators
+                # initialize hydrophobic surface calculator
+                hydro_filter = (
+                    prs.rosetta.protocols.denovo_design.filters.ExposedHydrophobicsFilter()
+                )
+                hydro_filter.set_sasa_cutoff(0)
+                hydro_filter.set_threshold(-1)
+                # initialize Salt bridge calculator
+                salt_bridges_calculator = (
+                    prs.rosetta.protocols.pose_metric_calculators.SaltBridgeCalculator()
+                )
+
+                # Distribute sequences equally among processors
+                num_sequences = len(sequences)
+                sequences_per_proc = num_sequences // size
+                remainder = num_sequences % size
+                start_index = rank * sequences_per_proc + min(rank, remainder)
+                end_index = (
+                    start_index + sequences_per_proc + (1 if rank < remainder else 0)
+                )
+            except Exception as e:
+                print("Error initializing the calculators")
+                raise (ValueError(f"Error initializing the calculators: {e}"))
+
+            # Initialize all the datastructures
+            relaxed_energies = []
+            interface_scores = []
+            apo_scores = []
+            hydrophobic_scores = []
+            n_salt_bridges_iter = []
+            distances_res = []
+            # Each processor relaxes its assigned sequences
+            try:
+                print(
+                    f"Rank {rank} is relaxing sequences from {start_index} to {end_index}"
+                )
+                for i in range(start_index, end_index):
+                    jd = prs.PyJobDistributor(
+                        f"{output_folder}/decoy_R{rank}_I{i}",
+                        nstruct=1,
+                        scorefxn=sfxn_scorer,
+                        compress=False,
+                    )
+
+                    # name = f"{output_folder}/decoy_R{rank}_I{i}"
+                    # Get the mutated sequence translated to a pose
+                    pose = self.mutate_native_pose(native_pose, sequences[i])
+                    # Relax the pose
+                    test_pose, mean_energy = self.relax_sequence(
+                        pose=pose,
+                        jd=jd,
+                        fastrelax_mover=fastrelax_mover,
+                        sfxn=sfxn_scorer,
+                    )
+                    if ligand_chain != "None" and ligand_chain is not None:
+                        # Get the apo score
+                        apo_score = self.calculate_Apo_Score(
+                            test_pose, sfxn_scorer, ligand_chain
+                        )
+                        # Get the binding score
+                        interface_score = self.calculate_Interface_Score(
+                            test_pose, sfxn_scorer, ligand_chain
+                        )
+                    # Apply the hydrophobic filter and get the score
+                    hydro_filter.apply(test_pose)
+                    hydrophobic_score = hydro_filter.compute(test_pose)
+                    # Calculate the salt bridges
+                    n_salt_bridges = salt_bridges_calculator.get(
+                        key="salt_bridge", this_pose=test_pose
+                    )
+                    # Calculate the distances
+                    if distance_dict != "None" and distance_dict is not None:
+                        res_distance = distance_dict.copy()
+                        for key, value in distance_dict.items():
+                            res_distance[key] = self.distance(
+                                test_pose, value[0], value[1]
+                            )
+                    # n_salt_bidges = self.get_salt_bridges(f"{job_output}_R{rank}_I{i}_0.pdb", "pdb")
+
+                    # Gather results
+                    relaxed_energies.append((i, mean_energy))
+                    if ligand_chain != "None" and ligand_chain is not None:
+                        interface_scores.append((i, interface_score))
+                        apo_scores.append((i, apo_score))
+                    hydrophobic_scores.append((i, hydrophobic_score))
+                    n_salt_bridges_iter.append((i, n_salt_bridges))
+                    if distance_dict != "None" and distance_dict is not None:
+                        distances_res.append((i, res_distance))
+
+                # Gather results from all processors
+                all_relaxed_energies = comm.gather(relaxed_energies, root=0)
+                if ligand_chain != "None" and ligand_chain is not None:
+                    all_interface_scores = comm.gather(interface_scores, root=0)
+                    all_apo_scores = comm.gather(apo_scores, root=0)
+                all_hydrophobic_scores = comm.gather(hydrophobic_scores, root=0)
+                all_salt_bridges = comm.gather(n_salt_bridges_iter, root=0)
+                if distance_dict != "None" and distance_dict is not None:
+                    all_distances_res = comm.gather(distances_res, root=0)
+            except Exception as e:
+                print("Error in the main loop of the relaxation")
+                raise (ValueError(f"Error in the main loop of the relaxation: {e}"))
+
+            # If rank 0, process the gathered results
+            if rank == 0:
+
                 print(f"+++++++++++++++++Rank {rank} gathering++++++++++++++++++")
 
                 # Flatten the list of lists
@@ -475,9 +483,10 @@ class Mpi_relax:
                 df.to_csv(f"{output_folder}/rosetta_scores.csv", index=False)
 
                 exit(0)
-            except Exception as e:
-                print(f"Error in rank 0: {e}")
-                exit(1)
+
+        except Exception as e:
+            print(f"Error in rank 0: {e}")
+            comm.Abort(1)
 
 
 import argparse
