@@ -877,7 +877,7 @@ class GeneticAlgorithm(Optimizer):
                     self.logger.info(
                         f"Exceeded the number of attempts to generate a new sequence, switching to mutation"
                     )
-                    child_sequence, sequences_to_add = self.mutation_on_crossover(
+                    child_sequences, sequences_to_add = self.mutation_on_crossover(
                         parent_sequences,
                         chain,
                         mutations_probabilities=mutations_probabilities,
