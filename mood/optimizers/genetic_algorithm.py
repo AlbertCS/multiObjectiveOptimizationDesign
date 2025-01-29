@@ -602,7 +602,9 @@ class GeneticAlgorithm(Optimizer):
                     self.sequence_to_file_frst[sequence_to_mutate]
                 )
             else:
-                self.logger.error("No name found for the sequence")
+                self.logger.error(
+                    f"No name found for the sequence: {sequence_to_mutate}"
+                )
 
             frst_index = single_frst["FrstIndex"]
             # Normalize the values of frst index, so they go between 0 and 1
@@ -676,7 +678,7 @@ class GeneticAlgorithm(Optimizer):
                 chain=chain,
                 sequence_to_mutate=sequence_to_start_from,
                 min_mutations=self.min_mutation_per_iteration,
-                max_mutations_=self.max_mutation_per_iteration,
+                max_mutations=self.max_mutation_per_iteration,
                 mutations_probabilities=mutations_probabilities,
             )
             # TODO may need to adapt to a more than one mutation per iteration
@@ -716,7 +718,7 @@ class GeneticAlgorithm(Optimizer):
                     f"Exceeded the number of attempts to generate a new sequence"
                 )
             attemps += 1
-        return sequences_to_add
+        return child_sequences, sequences_to_add
 
     # Function to evaluate a single mutation
     def evaluate_single_mutation(self, arg):
@@ -875,8 +877,10 @@ class GeneticAlgorithm(Optimizer):
                     self.logger.info(
                         f"Exceeded the number of attempts to generate a new sequence, switching to mutation"
                     )
-                    sequences_to_add = self.mutation_on_crossover(
-                        parent_sequences, chain
+                    child_sequence, sequences_to_add = self.mutation_on_crossover(
+                        parent_sequences,
+                        chain,
+                        mutations_probabilities=mutations_probabilities,
                     )
                     break
 
@@ -1011,7 +1015,9 @@ class GeneticAlgorithm(Optimizer):
                 self.logger.info(
                     f"Exceeded the number of attempts to generate a new sequence, switching to mutation"
                 )
-                sequences_to_add = self.mutation_on_crossover(parent_sequences, chain)
+                child_sequences, sequences_to_add = self.mutation_on_crossover(
+                    parent_sequences, chain
+                )
                 break
 
             general_attempt += 1

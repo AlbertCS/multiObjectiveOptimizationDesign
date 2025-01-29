@@ -64,6 +64,9 @@ class RosettaMetrics(Metric):
 
         sequences = df["Sequence"].tolist()
 
+        if sequences == []:
+            raise ValueError("No sequences to evaluate")
+
         output_folder = f"{folder_name}/{str(iteration).zfill(3)}/relax"
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
@@ -120,11 +123,6 @@ class RosettaMetrics(Metric):
 
         except Exception as e:
             raise Exception(f"An error occurred while running the Rosetta metrics: {e}")
-
-        # # Delete the pdb files
-        # for file in os.listdir(output_folder):
-        #     if file.endswith(".pdb") or file.endswith(".pdb.gz"):
-        #         os.remove(os.path.join(output_folder, file))
 
         if not os.path.exists(f"{output_folder}/rosetta_scores.csv"):
             raise ValueError("The Rosetta metrics did not run successfully")
