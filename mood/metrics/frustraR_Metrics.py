@@ -73,11 +73,12 @@ class FrustraRMetrics(Metric):
                     pdbs.append(f"{folder_name}/{str(iteration).zfill(3)}/relax/{file}")
         pdbs.sort()
         names = []
-        for pdb in pdbs:
+        for i, pdb in enumerate(pdbs):
             name_pdb = pdb.split("/")[-1]
             name = (
                 name_pdb.split("_")[0]
                 + name_pdb.split("_")[2].replace("I", "")
+                + f"_{i}"
                 + ".pdb"
             )
             names.append(name)
@@ -89,9 +90,9 @@ class FrustraRMetrics(Metric):
         # Open the file in write mode
         with open(sequences_file, "w") as file:
             # Iterate over the sequences
-            for sequence, name in zip(sequences, names):
+            for i, sequence, name in enumerate(zip(sequences, names)):
                 # Write each sequence to the file
-                file.write(f">{name.replace(".pdb", "")}\n")
+                file.write(f">{name.replace(".pdb", "")}_{i}\n")
                 file.write(sequence + "\n")
 
         # Run the frustration calculation
