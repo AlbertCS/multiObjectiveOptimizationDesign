@@ -2,7 +2,6 @@ import argparse
 import json
 import os
 import pickle
-import time
 from multiprocessing import Pool
 
 import numpy as np
@@ -248,6 +247,7 @@ class ProcessRelax:
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
 
+        distance_dict = None
         if distance_file is not None:
             if distance_file.endswith(".pkl"):
                 with open(distance_file, "rb") as file:
@@ -372,7 +372,7 @@ if __name__ == "__main__":
 
     if not os.path.exists(args.sequences_file):
         raise ValueError(f"The sequence file {args.sequences_file} does not exist")
-    start = time.time()
+
     process_relax = ProcessRelax(pyrosetta_options)
     process_relax.main(
         output_folder=args.output_folder,
@@ -383,4 +383,3 @@ if __name__ == "__main__":
         ligand_chain=args.ligand_chain,
         n_processes=args.n_processes,
     )
-    end = time.time()

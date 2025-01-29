@@ -50,42 +50,6 @@ class RosettaMetrics(Metric):
     def objectives(self, value):
         self._objectives = value
 
-    def _copyScriptFile(
-        self, output_folder, script_name, no_py=False, subfolder=None, hidden=True
-    ):
-        """
-        Copy a script file from the MultiObjectiveOptimization package.
-
-        Parameters
-        ==========
-
-        """
-        # Get script
-        base_path = "mood/metrics/scripts"
-        if subfolder is not None:
-            base_path = os.path.join(base_path, subfolder)
-
-        script_path = os.path.join(base_path, script_name)
-        with resource_stream(
-            Requirement.parse("MultiObjectiveOptimization"), script_path
-        ) as script_file:
-            script_file = io.TextIOWrapper(script_file)
-
-            # Adjust script name if no_py is True
-            if no_py:
-                script_name = script_name.replace(".py", "")
-
-            # Build the output path
-            if hidden:
-                output_path = os.path.join(output_folder, f".{script_name}")
-            else:
-                output_path = os.path.join(output_folder, script_name)
-
-            # Write the script to the output folder
-            with open(output_path, "w") as sof:
-                for line in script_file:
-                    sof.write(line)
-
     def clean(self, folder_name, iteration, max_iteration):
         relax_folder = f"{folder_name}/{str(iteration).zfill(3)}/relax"
         if os.path.exists(relax_folder):
@@ -113,17 +77,12 @@ class RosettaMetrics(Metric):
                 # Write each sequence to the file
                 file.write(sequence + "\n")
 
-        # Copy the script to be run in mpi
-        self._copyScriptFile(
-            script_name="mpi_rosetta_metrics.py", output_folder=folder_name
-        )
-
         # TODO may be a good idea to copy the params folder to the input folder of the mood
         try:
             if self.params_folder is None:
                 patches = []
                 params = []
-            elif not os.path.exists(self.params_folder):  # Add this check
+            elif not os.path.exists(self.params_folder):
                 print(f"Warning: Directory {self.params_folder} does not exist")
                 patches = []
                 params = []
