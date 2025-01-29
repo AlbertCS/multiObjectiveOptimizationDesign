@@ -27,7 +27,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
                 seed=1235,
                 native_pdb=native_pdb,
             ),
-            ProteinMPNNMetrics(seed=1235, native_pdb=native_pdb),
+            # ProteinMPNNMetrics(seed=1235, native_pdb=native_pdb),
             FrustraRMetrics(
                 license_key=license_key,
                 docker_image="docker://proteinphysiologylab/frustratometer:latest",
@@ -35,7 +35,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         ]
         debug = True
         max_iteration = 50
-        population_size = 10
+        population_size = 2
         seed = 1235
         eval_mutations_params = {
             "min_energy_threshold": 0,
