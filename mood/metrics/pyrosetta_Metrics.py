@@ -1,11 +1,11 @@
 import io
 import os
-import subprocess
 
 import pandas as pd
 from pkg_resources import Requirement, resource_stream
 
 from mood.metrics import Metric
+from mood.metrics.scripts.thread_rosetta_metrics import ProcessRelax
 
 
 class RosettaMetrics(Metric):
@@ -119,32 +119,46 @@ class RosettaMetrics(Metric):
         )
 
         # TODO may be a good idea to copy the params folder to the input folder of the mood
-
         try:
-            cmd = f"mpirun -np {self.cpus} "
-            cmd += f"python {folder_name}/.mpi_rosetta_metrics.py "
-            cmd += f"--seed {self.seed} "
-            cmd += f"--output_folder {output_folder} "
-            cmd += f"--sequences_file {sequences_file} "
-            cmd += f"--params_folder {self.params_folder} "
-            cmd += f"--native_pdb {self.native_pdb} "
-            cmd += f"--distances {self.distances_file} "
-            cmd += f"--cst_file {self.cst_file} "
-            cmd += f"--ligand_chain {self.ligand_chain}"
+            if self.params_folder is None:
+                patches = []
+                params = []
+            elif not os.path.exists(self.params_folder):  # Add this check
+                print(f"Warning: Directory {self.params_folder} does not exist")
+                patches = []
+                params = []
+            else:
+                patches = [
+                    self.params_folder + "/" + x
+                    for x in os.listdir(self.params_folder)
+                    if x.endswith(".txt")
+                ]
+                params = [
+                    self.params_folder + "/" + x
+                    for x in os.listdir(self.params_folder)
+                    if x.endswith(".params")
+                ]
 
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=True,
+            # "-relax:range:cycles 1000"
+            options = f"-relax:default_repeats 1 -relax:range:cycles 5 -constant_seed true -jran {self.seed}"
+            if params != []:
+                params = " ".join(params)
+                options += f" -extra_res_fa {params}"
+            if patches != []:
+                patches = " ".join(patches)
+                options += f" -extra_patch_fa {patches}"
+
+            process_relax = ProcessRelax(options)
+            process_relax.main(
+                output_folder=output_folder,
+                sequences_file=sequences_file,
+                native_pdb=self.native_pdb,
+                distance_file=self.distances_file,
+                cst_file=self.cst_file,
+                ligand_chain=self.ligand_chain,
+                n_processes=self.cpus,
             )
-            stdout, stderr = proc.communicate()
-            print("Output:", stdout.decode())
-            print("Error:", stderr.decode())
-            with open(f"{output_folder}/rosetta.out", "w") as f:
-                f.write(stdout.decode())
-            with open(f"{output_folder}/rosetta.err", "w") as f:
-                f.write(stderr.decode())
+
         except Exception as e:
             raise Exception(f"An error occurred while running the Rosetta metrics: {e}")
 
