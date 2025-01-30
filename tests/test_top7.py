@@ -35,7 +35,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         ]
         debug = True
         max_iteration = 50
-        population_size = 2
+        population_size = 4
         seed = 1235
         eval_mutations_params = {
             "min_energy_threshold": 0,
@@ -46,8 +46,8 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
 
         # Folder name and remove if exists
         folder_name = "mood_job"
-        if os.path.exists(folder_name):
-            shutil.rmtree(folder_name)
+        # if os.path.exists(folder_name):
+        #     shutil.rmtree(folder_name)
 
         self.moo = MultiObjectiveOptimization(
             optimizer=optimizer,

@@ -574,47 +574,95 @@ class GeneticAlgorithm(Optimizer):
 
     # TODO implement the following sort: https://github.com/smkalami/nsga2-in-python/blob/main/nsga2.py
 
-    def add_frustration_files(
-        self,
-    ):
-        frustrar_folder = (
-            f"{self.folder_name}/{str(self.current_iteration -1).zfill(3)}/frustrar"
+    def add_frustration_files(self):
+        """
+        Add frustration files from the current and previous iteration's frustrar folders.
+        Reads equivalence files and maps sequences to their corresponding result files.
+        """
+        for offset in [1, 2]:
+            iteration = str(self.current_iteration - offset).zfill(3)
+            frustrar_folder = os.path.join(self.folder_name, iteration, "frustrar")
+
+            if not os.path.exists(frustrar_folder):
+                continue
+
+            equivalence_file = os.path.join(
+                frustrar_folder, "results", "equivalences.csv"
+            )
+
+            try:
+                equivalences = pd.read_csv(equivalence_file)
+
+                # Map sequences to their result files
+                self.sequence_to_file_frst.update(
+                    {
+                        row["Sequence"]: os.path.join(
+                            frustrar_folder,
+                            "results",
+                            f"{row['Names']}_singleresidue.csv",
+                        )
+                        for _, row in equivalences.iterrows()
+                    }
+                )
+
+            except (FileNotFoundError, pd.errors.EmptyDataError) as e:
+                print(f"Error processing {equivalence_file}: {str(e)}")
+                raise e
+
+    def add_frustrationBias_to_mutations(
+        self, sequence_to_mutate: str, chain: str
+    ) -> list:
+        """
+        Calculate frustration bias for mutations based on previous iteration data.
+
+        Args:
+            sequence_to_mutate: The sequence to analyze for frustration
+            chain: The protein chain identifier
+
+        Returns:
+            list: Normalized frustration indices or default values if data unavailable
+        """
+        # Default length for fallback case
+        default_length = len(self.mutable_aa[chain])
+
+        # Check if frustration data exists
+        frustrar_folder = os.path.join(
+            self.folder_name, f"{str(self.current_iteration - 1).zfill(3)}", "frustrar"
         )
-        if os.path.exists(frustrar_folder):
-            equivalence_file = f"{frustrar_folder}/results/equivalences.csv"
-            equivalences = pd.read_csv(equivalence_file)
-            # Save the equivalences
-            for row in equivalences.iterrows():
-                self.sequence_to_file_frst[row[1]["Sequence"]] = (
-                    f"{frustrar_folder}/results/{row[1]['Names']}_singleresidue.csv"
-                )
 
-    def add_frustrationBias_to_mutations(self, sequence_to_mutate, chain):
+        if not os.path.exists(frustrar_folder):
+            return [1] * default_length
 
-        frustrar_folder = (
-            f"{self.folder_name}/{str(self.current_iteration -1).zfill(3)}/frustrar"
-        )
-        # if the frustration calculation exists, add the frustration bias to the mutations
-        if os.path.exists(frustrar_folder):
+        # Check if sequence mapping exists
+        if sequence_to_mutate not in self.sequence_to_file_frst:
+            self.logger.error(f"No name found for the sequence: {sequence_to_mutate}")
+            return [1] * default_length
 
-            if sequence_to_mutate in self.sequence_to_file_frst.keys():
-                single_frst = pd.read_csv(
-                    self.sequence_to_file_frst[sequence_to_mutate]
-                )
-            else:
-                self.logger.error(
-                    f"No name found for the sequence: {sequence_to_mutate}"
-                )
+        try:
+            # Read frustration data
+            frst_file = self.sequence_to_file_frst[sequence_to_mutate]
+            single_frst = pd.read_csv(frst_file)
+
+            if "FrstIndex" not in single_frst.columns:
+                self.logger.error(f"FrstIndex column not found in {frst_file}")
+                return [1] * default_length
 
             frst_index = single_frst["FrstIndex"]
-            # Normalize the values of frst index, so they go between 0 and 1
-            frst_index = 1 - (frst_index - frst_index.min()) / (
+
+            # Handle edge case where all values are the same
+            if frst_index.min() == frst_index.max():
+                return [1] * default_length
+
+            # Normalize values between 0 and 1, then invert
+            normalized_frst = 1 - (frst_index - frst_index.min()) / (
                 frst_index.max() - frst_index.min()
             )
-        else:
-            frst_index = [1] * len(self.mutable_aa[chain].keys())
 
-        return list(frst_index)
+            return list(normalized_frst)
+
+        except Exception as e:
+            self.logger.error(f"Error processing frustration data: {str(e)}")
+            return [1] * default_length
 
     def generate_mutation_sequence(
         self,
