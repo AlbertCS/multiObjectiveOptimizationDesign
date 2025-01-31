@@ -161,12 +161,15 @@ class MultiObjectiveOptimization:
                     for chain, positions in mutable_aa.items()
                 }
 
+        self.mutation_probability = mutation_probability
+        self.mutations_probabilities = mutations_probabilities
+
         if mutation_probability:
             self.mutations_probabilities = mutations_probabilities
             self.mutation_probability = mutation_probability
             self.mutable_aa = self._generate_all_aa_mutable()
 
-        if self.mutable_aa is None:
+        if mutable_aa is None:
             self.mutable_aa = self._generate_all_aa_mutable()
 
         self.recombination_with_mutation = recombination_with_mutation
@@ -582,9 +585,8 @@ class MultiObjectiveOptimization:
                     # If we initialize the population with proteinMPNN and using mutation probabilities
                     if self.mutation_probability and self.mutations_probabilities == {}:
 
-                        from mood.utils.utils_proteinMPNN import (
-                            mutation_probabilities_calculation_proteinMPNN,
-                        )
+                        from mood.utils.utils_proteinMPNN import \
+                            mutation_probabilities_calculation_proteinMPNN
 
                         self.logger.info(
                             "Calculating the mutation probabilities with ProteinMPNN"
@@ -625,6 +627,7 @@ class MultiObjectiveOptimization:
                         self.optimizer.init_population(
                             chain=chain,
                             sequences_initial=seq_chains[chain],
+                            current_iteration=self.current_iteration,
                             mutations_probabilities=self.mutations_probabilities,
                         )
                     )

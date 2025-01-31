@@ -1,7 +1,7 @@
 import concurrent.futures
 import os
 import random
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -238,9 +238,15 @@ class GeneticAlgorithm(Optimizer):
         return final_energy_starting_pose - final_energy_mutated_pose
 
     def init_population(
-        self, chain, sequences_initial, mutations_probabilities, max_attempts=1000
+        self,
+        chain,
+        sequences_initial,
+        current_iteration,
+        mutations_probabilities,
+        max_attempts=1000,
     ):
         self.logger.info("Initializing the population")
+        self.current_iteration = current_iteration
         # Initial checks
         if sequences_initial is None:
             self.logger.error("No initial sequences provided")
@@ -691,7 +697,7 @@ class GeneticAlgorithm(Optimizer):
                 )[0]
             except Exception as e:
                 self.logger.error(f"Error selecting the position: {e}")
-            if mutations_probabilities is None:
+            if mutations_probabilities is None or mutations_probabilities == {}:
                 new_aa = self.rng.choice(self.mutable_aa[chain][position])
             else:
                 if position not in mutations_probabilities[chain].keys():

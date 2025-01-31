@@ -12,7 +12,7 @@ from mood.multiObjectiveOptimization import MultiObjectiveOptimization
 
 class TestmultiObjectiveOptimization(unittest.TestCase):
     def setUp(self):
-        data_path = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/top7"
+        data_path = "tests/data/top7"
 
         data = AlgorithmDataSingleton()
         optimizer = "genetic_algorithm"
@@ -46,8 +46,8 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
 
         # Folder name and remove if exists
         folder_name = "mood_job"
-        # if os.path.exists(folder_name):
-        #     shutil.rmtree(folder_name)
+        if os.path.exists(folder_name):
+            shutil.rmtree(folder_name)
 
         self.moo = MultiObjectiveOptimization(
             optimizer=optimizer,
@@ -62,7 +62,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             seed=seed,
             population_size=population_size,
             offset=3,
-            # eval_mutations_params=eval_mutations_params,
+            eval_mutations_params=eval_mutations_params,
             mutation_probability=True,
         )
 
