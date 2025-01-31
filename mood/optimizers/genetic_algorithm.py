@@ -731,22 +731,13 @@ class GeneticAlgorithm(Optimizer):
             )
             # TODO may need to adapt to a more than one mutation per iteration
             # Evaluate the mutation with rosetta
-            if self.eval_mutations:
-                dEnergy = self.local_relax(
-                    residues=[mut[0][1]],
-                    moving_chain=chain,
-                    starting_sequence=sequence_to_start_from,
-                    mutated_sequence=child_sequence,
-                    cst_file=self.eval_mutations_params["cst_file"],
-                )
-                if dEnergy < self.eval_mutations_params["min_energy_threshold"]:
-                    continue
-            # If the sequence does not exist, add it to the list of sequences to add
             if (
                 not self.data.sequence_exists(chain, child_sequence)
                 and child_sequence not in child_sequences
             ):
                 child_sequences.append(child_sequence)
+                mutations.append(mut)
+                starting_sequences.append(sequence_to_start_from)
                 sequences_to_add.append(
                     Sequence(
                         sequence=child_sequence,
@@ -766,6 +757,21 @@ class GeneticAlgorithm(Optimizer):
                     f"Exceeded the number of attempts to generate a new sequence"
                 )
             attemps += 1
+
+            if len(child_sequences) == self.population_size and self.eval_mutations:
+                # Evaluate the mutation with rosetta
+                self.logger.info("Evaluating the mutations")
+                child_sequences, mutations, starting_sequences, n_seqs_added = (
+                    self.evaluate_mutations_on_sequence(
+                        mutated_sequences=child_sequences,
+                        mutations=mutations,
+                        chain=chain,
+                        starting_sequences=starting_sequences,
+                        n_seqs_added=n_seqs_added,
+                    )
+                )
+                print(f"Number of sequences added: {n_seqs_added}")
+
         return child_sequences, sequences_to_add
 
     # Function to evaluate a single mutation
