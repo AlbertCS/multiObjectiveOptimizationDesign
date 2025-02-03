@@ -752,6 +752,8 @@ class GeneticAlgorithm(Optimizer):
         child_sequences = []
         sequences_to_add = []
         mutations = []
+        starting_sequences = []
+        n_seqs_added = 0
         attemps = 0
         while len(child_sequences) < self.population_size:
             seq_index = self.data.nsequences(chain)
