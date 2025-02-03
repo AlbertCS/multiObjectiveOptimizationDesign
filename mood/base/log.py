@@ -1,6 +1,7 @@
 # Python code for a logger with a singleton implementation
 
 import logging
+from datetime import datetime
 
 
 class SingletonType(type):
@@ -27,7 +28,9 @@ class Logger(metaclass=SingletonType):
 
         # FileHandler for file output
         # file_handler = logging.FileHandler("mood.log", mode="a")
-        file_handler = logging.FileHandler("mood.log", mode="w")
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        log_filename = f"mood_{timestamp}.log"
+        file_handler = logging.FileHandler(log_filename, mode="w")
         file_formatter = logging.Formatter(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             datefmt="%d-%m-%y %H:%M:%S",
