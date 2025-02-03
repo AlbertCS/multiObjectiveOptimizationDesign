@@ -20,13 +20,17 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         native_pdb = f"{data_path}/1QYS.pdb"
         license_key = "MODELIRANJE"
 
+        ros_metric = RosettaMetrics(
+            params_folder=None,
+            cpus=cpus,
+            seed=1235,
+            native_pdb=native_pdb,
+        )
+
+        ros_metric.objectives = []
+
         metrics = [
-            RosettaMetrics(
-                params_folder=None,
-                cpus=cpus,
-                seed=1235,
-                native_pdb=native_pdb,
-            ),
+            ros_metric,
             # ProteinMPNNMetrics(seed=1235, native_pdb=native_pdb),
             FrustraRMetrics(
                 license_key=license_key,
