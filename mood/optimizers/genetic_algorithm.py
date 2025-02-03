@@ -51,6 +51,7 @@ class GeneticAlgorithm(Optimizer):
         max_mutation_per_iteration=1,
         min_mutation_per_iteration=1,
         folder_name=None,
+        logger=None,
     ) -> None:
         super().__init__(
             population_size=population_size,
@@ -64,7 +65,7 @@ class GeneticAlgorithm(Optimizer):
         # self.mutable_positions = mutable_positions
         self.mutable_aa = mutable_aa
         self.init_mutation_rate = init_mutation_rate
-        self.logger = Logger(debug).get_log()
+        self.logger = logger
         self.child_sequences = []
         self.crossoverTypes = ["uniform", "two_point", "single_point"]
         self.native = None
