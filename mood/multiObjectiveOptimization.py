@@ -585,8 +585,9 @@ class MultiObjectiveOptimization:
                     # If we initialize the population with proteinMPNN and using mutation probabilities
                     if self.mutation_probability and self.mutations_probabilities == {}:
 
-                        from mood.utils.utils_proteinMPNN import \
-                            mutation_probabilities_calculation_proteinMPNN
+                        from mood.utils.utils_proteinMPNN import (
+                            mutation_probabilities_calculation_proteinMPNN,
+                        )
 
                         self.logger.info(
                             "Calculating the mutation probabilities with ProteinMPNN"
