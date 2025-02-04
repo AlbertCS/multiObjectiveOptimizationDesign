@@ -222,6 +222,7 @@ class MultiObjectiveOptimization:
                     eval_mutations=eval_mutations,
                     eval_mutations_params=eval_mutations_params,
                     folder_name=folder_name,
+                    logger=self.logger,
                 )
 
     def _generate_all_aa_mutable(self):
