@@ -1,7 +1,6 @@
-import multiprocessing
+import concurrent.futures
 import os
 import random
-import time
 from typing import Any, Dict, List, Tuple
 
 import numpy as np
@@ -10,20 +9,6 @@ import pandas as pd
 from mood.base.log import Logger
 from mood.base.sequence import Sequence
 from mood.optimizers.optimizer import Optimizer, OptimizersType
-
-
-def worker_init(class_instance):
-    """Initialize a new class instance in each worker process"""
-    global instance
-    # Copy the necessary attributes from the original instance
-    instance = class_instance
-    instance.init_pyrosetta()
-
-
-def worker_evaluate_mutation(arg):
-    """Worker function that runs in each process"""
-    global instance
-    return instance.evaluate_single_mutation(arg)
 
 
 class GeneticAlgorithm(Optimizer):
@@ -832,76 +817,70 @@ class GeneticAlgorithm(Optimizer):
 
     def evaluate_mutations_on_sequence(
         self,
-        mutated_sequences: List[str],
-        mutations: List[str],
-        chain: str,
-        starting_sequences: List[str],
-        n_seqs_added: int = 0,
-    ) -> Tuple[List[str], List[str], List[str], int]:
+        mutated_sequences,
+        mutations,
+        chain,
+        starting_sequences,
+        n_seqs_added=0,
+    ):
         """
-        Evaluate mutations on sequences using proper process initialization for PyRosetta.
-        """
-        # Get previously evaluated sequences
-        previous_sequences = {
-            "sequences": mutated_sequences[:n_seqs_added],
-            "mutations": mutations[:n_seqs_added],
-            "starting": starting_sequences[:n_seqs_added],
-        }
+        Evaluate mutations on a sequence and retain the ones that meet energy criteria.
 
-        # Prepare evaluation arguments
-        sequences_to_evaluate = [
-            (seq, mut, start, chain)
-            for seq, mut, start in zip(
+        Parameters:
+        - mutated_sequences: List of mutated sequences to evaluate.
+        - mutations: List of mutations applied to generate mutated_sequences.
+        - chain: The chain on which mutations are being evaluated.
+        - starting_sequences: List of sequences used as a basis for mutations.
+        - n_seqs_added: Number of sequences that were already evaluated.
+
+        Returns:
+        - better_sequences: List of sequences that pass the energy criteria.
+        - better_sequences_mut: Corresponding mutations for better_sequences.
+        - better_sequences_starting: Starting sequences for better_sequences.
+        - num_better_sequences: Number of sequences that passed the energy criteria.
+        """
+        # Initialize lists to store sequences that meet the criteria
+        better_sequences = []
+        better_sequences_mut = []
+        better_sequences_starting = []
+
+        # Prepare the arguments for parallel execution
+        args_list = list(
+            zip(
                 mutated_sequences[n_seqs_added:],
                 mutations[n_seqs_added:],
                 starting_sequences[n_seqs_added:],
+                [chain] * len(mutated_sequences[n_seqs_added:]),
             )
-        ]
+        )
 
-        if not sequences_to_evaluate:
-            return (
-                previous_sequences["sequences"],
-                previous_sequences["mutations"],
-                previous_sequences["starting"],
-                len(previous_sequences["sequences"]),
-            )
+        # Determine the number of threads
+        num_threads = os.cpu_count() - 1
 
-        # Initialize result containers
-        better_sequences = {"sequences": [], "mutations": [], "starting": []}
+        # Use ProcessPoolExecutor to parallelize the evaluation
+        with concurrent.futures.ProcessPoolExecutor(
+            max_workers=num_threads
+        ) as executor:
+            results = list(executor.map(self.evaluate_single_mutation, args_list))
 
-        try:
-            # Create a pool with process initialization
-            num_processes = min(20, len(sequences_to_evaluate))
-            ctx = multiprocessing.get_context("spawn")
+        # Process the results
+        for child_sequence, mut, sequence_to_start_from, dEnergy in results:
+            # If the energy is below the threshold, skip this sequence
+            if dEnergy < self.eval_mutations_params["min_energy_threshold"]:
+                continue
 
-            with ctx.Pool(
-                processes=num_processes,
-                initializer=worker_init,
-                initargs=(self,),  # Pass the current instance to initialize workers
-            ) as pool:
-                # Process sequences in parallel
-                for result in pool.imap_unordered(
-                    worker_evaluate_mutation,
-                    sequences_to_evaluate,
-                    chunksize=max(1, len(sequences_to_evaluate) // (num_processes * 4)),
-                ):
-                    child_sequence, mut, sequence_to_start_from, energy = result
-                    if energy >= self.eval_mutations_params["min_energy_threshold"]:
-                        better_sequences["sequences"].append(child_sequence)
-                        better_sequences["mutations"].append(mut)
-                        better_sequences["starting"].append(sequence_to_start_from)
-                        self.logger.debug(f"Accepted mutation with energy: {energy}")
+            # Store the sequences that meet the energy threshold
+            better_sequences.append(child_sequence)
+            better_sequences_mut.append(mut)
+            better_sequences_starting.append(sequence_to_start_from)
+            self.logger.debug(f"Mutation energy: {dEnergy} accepted")
 
-        except Exception as e:
-            self.logger.error(f"Error during parallel execution: {str(e)}")
-            raise RuntimeError("Failed to evaluate mutations") from e
-
-        # Combine and return results
+        # Return only the sequences that meet the criteria
         return (
-            previous_sequences["sequences"] + better_sequences["sequences"],
-            previous_sequences["mutations"] + better_sequences["mutations"],
-            previous_sequences["starting"] + better_sequences["starting"],
-            len(previous_sequences["sequences"]) + len(better_sequences["sequences"]),
+            mutated_sequences[:n_seqs_added] + better_sequences,
+            mutations[:n_seqs_added] + better_sequences_mut,
+            starting_sequences[:n_seqs_added] + better_sequences_starting,
+            len(mutated_sequences[:n_seqs_added]) + len(better_sequences),
         )
 
     def generate_child_population(

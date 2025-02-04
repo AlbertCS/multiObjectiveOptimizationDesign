@@ -77,28 +77,6 @@ class ProteinMPNNMetrics(Metric):
                 file.write(f">s{i}\n")
                 file.write(sequence + "\n")
 
-        # Not needed for the evaluation only when creating the sequences
-        # if self.fixed_positions:
-        #     from mood.metrics.ProteinMPNN.parse_multiple_chains import (
-        #         main_parse_multiple_chains,
-        #     )
-
-        #     main_parse_multiple_chains(
-        #         input_path=f"{folder_name}/input",
-        #         output_path=f"{output_folder}/parsed_pdbs.jsonl",
-        #     )
-
-        #     from mood.metrics.ProteinMPNN.make_fixed_positions_dict import (
-        #         main_make_fixed_positions,
-        #     )
-
-        #     main_make_fixed_positions(
-        #         input_path=f"{output_folder}/parsed_pdbs.jsonl",
-        #         output_path=f"{output_folder}/fixed_positions.json",
-        #         chain_list=chain,
-        #         position_list=self.fixed_positions[chain],
-        #     )
-
         # Run the ProteinMPNN
         mpnn_main(
             path_to_fasta=sequences_file,
