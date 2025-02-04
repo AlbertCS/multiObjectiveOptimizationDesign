@@ -7,24 +7,17 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
+from mood.base.log import Logger
 from mood.base.sequence import Sequence
 from mood.optimizers.optimizer import Optimizer, OptimizersType
 
 
-def worker_init(class_instance, init_params):
+def worker_init(class_instance):
     """Initialize a new class instance in each worker process"""
     global instance
-    try:
-        # Recreate class instance with provided parameters
-        instance = class_instance(**init_params)
-
-        # Reinitialize random number generator with the same seed
-        instance.rng = random.Random(init_params["seed"])
-
-        instance.init_pyrosetta()
-    except Exception as e:
-        print(f"Worker initialization error: {e}")
-        raise
+    # Copy the necessary attributes from the original instance
+    instance = class_instance
+    instance.init_pyrosetta()
 
 
 def worker_evaluate_mutation(arg):
@@ -50,7 +43,6 @@ class GeneticAlgorithm(Optimizer):
         max_mutation_per_iteration=1,
         min_mutation_per_iteration=1,
         folder_name=None,
-        logger=None,
     ) -> None:
         super().__init__(
             population_size=population_size,
@@ -64,7 +56,7 @@ class GeneticAlgorithm(Optimizer):
         # self.mutable_positions = mutable_positions
         self.mutable_aa = mutable_aa
         self.init_mutation_rate = init_mutation_rate
-        self.logger = logger
+        self.logger = Logger(debug).get_log()
         self.child_sequences = []
         self.crossoverTypes = ["uniform", "two_point", "single_point"]
         self.native = None
@@ -847,11 +839,8 @@ class GeneticAlgorithm(Optimizer):
         n_seqs_added: int = 0,
     ) -> Tuple[List[str], List[str], List[str], int]:
         """
-        Parallel mutation evaluation with robust multiprocessing support.
+        Evaluate mutations on sequences using proper process initialization for PyRosetta.
         """
-        # Protect against multiprocessing issues
-        multiprocessing.set_start_method("spawn", force=True)
-
         # Get previously evaluated sequences
         previous_sequences = {
             "sequences": mutated_sequences[:n_seqs_added],
@@ -859,7 +848,7 @@ class GeneticAlgorithm(Optimizer):
             "starting": starting_sequences[:n_seqs_added],
         }
 
-        # Prepare sequences for evaluation
+        # Prepare evaluation arguments
         sequences_to_evaluate = [
             (seq, mut, start, chain)
             for seq, mut, start in zip(
@@ -877,35 +866,18 @@ class GeneticAlgorithm(Optimizer):
                 len(previous_sequences["sequences"]),
             )
 
-        # Prepare initialization parameters matching the __init__ method
-        init_params = {
-            "population_size": self.population_size,
-            "init_mutation_rate": self.init_mutation_rate,
-            "seed": self.seed,
-            "debug": self.debug,
-            "data": self.data,
-            "mutable_aa": self.mutable_aa,
-            "eval_mutations": self.eval_mutations,
-            "eval_mutations_params": self.eval_mutations_params,
-            "crossover_iterations": self.crossover_iterations,
-            "mutation_iterations": self.mutation_iterations,
-            "max_mutation_per_iteration": self.max_mutation_per_iteration,
-            "min_mutation_per_iteration": self.min_mutation_per_iteration,
-            "folder_name": self.folder_name,
-        }
-
         # Initialize result containers
         better_sequences = {"sequences": [], "mutations": [], "starting": []}
 
         try:
-            # Determine optimal number of processes
-            num_processes = max(1, multiprocessing.cpu_count() - 1)
+            # Create a pool with process initialization
+            num_processes = min(20, len(sequences_to_evaluate))
+            ctx = multiprocessing.get_context("spawn")
 
-            # Use spawning context for better compatibility
-            with multiprocessing.get_context("spawn").Pool(
+            with ctx.Pool(
                 processes=num_processes,
                 initializer=worker_init,
-                initargs=(self.__class__, init_params),
+                initargs=(self,),  # Pass the current instance to initialize workers
             ) as pool:
                 # Process sequences in parallel
                 for result in pool.imap_unordered(

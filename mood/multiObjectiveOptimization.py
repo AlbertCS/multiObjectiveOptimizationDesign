@@ -113,14 +113,10 @@ class MultiObjectiveOptimization:
         recombination_with_mutation=False,
         eval_mutations_params=None,
         fixed_positions=None,
-        log_dir=".",
     ) -> None:
 
         # Define the logger
-        self.logger = Logger(
-            debug,
-            log_dir=log_dir,
-        ).get_log()
+        self.logger = Logger(debug).get_log()
 
         self.metrics = metrics
         self.max_iteration = max_iteration
@@ -227,7 +223,6 @@ class MultiObjectiveOptimization:
                     eval_mutations=eval_mutations,
                     eval_mutations_params=eval_mutations_params,
                     folder_name=folder_name,
-                    logger=self.logger,
                 )
 
     def _generate_all_aa_mutable(self):
