@@ -1,7 +1,6 @@
 # Python code for a logger with a singleton implementation
 
 import logging
-from datetime import datetime
 
 
 class SingletonType(type):
@@ -14,7 +13,7 @@ class SingletonType(type):
 
 
 class Logger(metaclass=SingletonType):
-    def __init__(self, debug=False):
+    def __init__(self, debug=False, timestamp=""):
         self.log = logging.getLogger("mood_logger")
         self.log.setLevel(logging.DEBUG) if debug else self.log.setLevel(logging.INFO)
 
@@ -28,7 +27,6 @@ class Logger(metaclass=SingletonType):
 
         # FileHandler for file output
         # file_handler = logging.FileHandler("mood.log", mode="a")
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
         log_filename = f"mood_{timestamp}.log"
         file_handler = logging.FileHandler(log_filename, mode="w")
         file_formatter = logging.Formatter(
