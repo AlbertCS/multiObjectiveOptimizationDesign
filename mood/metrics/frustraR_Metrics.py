@@ -21,10 +21,12 @@ class FrustraRMetrics(Metric):
     ):
         super().__init__()
         self.state = {
-            "HighlyFrustratedSummation": "positive",
+            "Total_Frustration_Index": "positive",
+            "Positions_Frustrated": "negative",
+            "Totally_Frst_Index": "positive",
         }
         # This score is the summation of the highly frustrated residues (residues with positive energy)
-        self._objectives = ["HighlyFrustratedSummation"]
+        self._objectives = ["Total_Frustration_Index"]
         self.name = "frustraRMetrics"
         self.license_key = license_key
         self.docker_image = docker_image
@@ -35,13 +37,14 @@ class FrustraRMetrics(Metric):
 
     def clean(self, folder_name, iteration, max_iteration):
         # Clean frustration
-        if iteration != 0 and iteration != max_iteration - 1:
-            frustrar_folder = f"{folder_name}/{str(iteration).zfill(3)}/frustrar"
-            if os.path.exists(frustrar_folder):
-                for root, dirs, files in os.walk(f"{frustrar_folder}/pdb"):
-                    for file in files:
-                        if file.endswith(".pdb"):
-                            os.remove(os.path.join(root, file))
+        pass
+        # if iteration != 0 and iteration != max_iteration - 1:
+        #     frustrar_folder = f"{folder_name}/{str(iteration).zfill(3)}/frustrar"
+        #     if os.path.exists(frustrar_folder):
+        #         for root, dirs, files in os.walk(f"{frustrar_folder}/pdb"):
+        #             for file in files:
+        #                 if file.endswith(".pdb"):
+        #                     os.remove(os.path.join(root, file))
 
     def compute(self, sequences, iteration, folder_name, chain=None):
 
@@ -127,7 +130,7 @@ class FrustraRMetrics(Metric):
             raise ValueError("The FrustraR metrics did not run successfully")
 
         # Get the frustration values
-        accu_high_frust_total = []
+        total_frustration_total = []
         for name in names:
             with open(
                 f"{output_folder}/pdb/{name.replace(".pdb", "")}.done/FrustrationData/{name}_singleresidue",
@@ -136,21 +139,23 @@ class FrustraRMetrics(Metric):
                 singleResidue = pd.read_csv(file, sep=" ")
 
             frustration_type = []
-            accu_high_frust = 0
-            normalize_high_frust = []
+            total_pos_frustrated = 0
+            total_frustration = 0
+            total_max_frustrated = 0
 
             # Define the frustration type and if its highly frustrated make the summation
             for value in singleResidue["FrstIndex"]:
                 if value > 0.55:
                     frustration_type.append("MIN")
-                    normalize_high_frust.append(0)
+                    total_frustration += value
                 elif value < -1:
                     frustration_type.append("MAX")
-                    normalize_high_frust.append(abs(value + 1))
-                    accu_high_frust += value
+                    total_pos_frustrated += 1
+                    total_frustration += value
+                    total_max_frustrated += value
                 else:
                     frustration_type.append("NEU")
-                    normalize_high_frust.append(0)
+                    total_frustration += value
 
             aa = singleResidue["AA"]
             n_res = singleResidue["Res"]
@@ -160,7 +165,6 @@ class FrustraRMetrics(Metric):
                     "Res": n_res,
                     "FrstIndex": singleResidue["FrstIndex"],
                     "FrustrationType": frustration_type,
-                    "NormalizeHighFrustration": normalize_high_frust,
                 }
             )
 
@@ -175,10 +179,16 @@ class FrustraRMetrics(Metric):
                 f"{output_folder}/results/{name}_singleresidue.csv",
                 index=False,
             )
-            accu_high_frust_total.append(accu_high_frust)
+            total_frustration_total.append(total_frustration)
 
         # Create the dataframe
-        df = pd.DataFrame(accu_high_frust_total, columns=["HighlyFrustratedSummation"])
+        df = pd.DataFrame(
+            {
+                "Total_Frustration_Index": total_frustration_total,
+                "Positions_Frustrated": total_pos_frustrated,
+                "Totally_Frst_Index": total_max_frustrated,
+            }
+        )
 
         # Add the sequence column
         df["Sequence"] = sequences
