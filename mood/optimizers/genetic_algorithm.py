@@ -1,10 +1,10 @@
 import concurrent.futures
-import multiprocessing
 import os
 import random
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
+import pandas as pd
 
 from mood.base.log import Logger
 from mood.base.sequence import Sequence
@@ -27,6 +27,7 @@ class GeneticAlgorithm(Optimizer):
         mutation_iterations=1,
         max_mutation_per_iteration=1,
         min_mutation_per_iteration=1,
+        folder_name=None,
     ) -> None:
         super().__init__(
             population_size=population_size,
@@ -36,7 +37,6 @@ class GeneticAlgorithm(Optimizer):
             optimizerType=OptimizersType.GA,
         )
 
-        multiprocessing.set_start_method("spawn")
         self.rng = random.Random(seed)
         # self.mutable_positions = mutable_positions
         self.mutable_aa = mutable_aa
@@ -50,7 +50,8 @@ class GeneticAlgorithm(Optimizer):
         self.cycle_length = self.crossover_iterations + self.mutation_iterations
         self.max_mutation_per_iteration = max_mutation_per_iteration
         self.min_mutation_per_iteration = min_mutation_per_iteration
-
+        self.folder_name = folder_name
+        self.sequence_to_file_frst = {}
         self.eval_mutations = eval_mutations
         self.eval_mutations_params = eval_mutations_params
 
@@ -59,29 +60,35 @@ class GeneticAlgorithm(Optimizer):
         import pyrosetta as prs
 
         self.native_pdb = self.eval_mutations_params["native_pdb"]
+        params = []
+        patches = []
+        if "cst_file" not in self.eval_mutations_params.keys():
+            self.eval_mutations_params["cst_file"] = None
 
-        if self.eval_mutations_params["params_folder"] != None:
-            patches = [
-                self.eval_mutations_params["params_folder"] + "/" + x
-                for x in os.listdir(self.eval_mutations_params["params_folder"])
-                if x.endswith(".txt")
-            ]
-            params = [
-                self.eval_mutations_params["params_folder"] + "/" + x
-                for x in os.listdir(self.eval_mutations_params["params_folder"])
-                if x.endswith(".params")
-            ]
-            if patches == []:
-                patches = None
-            if params == []:
-                raise ValueError(
-                    f"Params files were not found in the given folder: {self.eval_mutations_params["params_folder"]}!"
-                )
+        if "params_folder" in self.eval_mutations_params.keys():
+
+            if self.eval_mutations_params["params_folder"] != None and os.path.exists(
+                self.eval_mutations_params["params_folder"]
+            ):
+                patches = [
+                    self.eval_mutations_params["params_folder"] + "/" + x
+                    for x in os.listdir(self.eval_mutations_params["params_folder"])
+                    if x.endswith(".txt")
+                ]
+                params = [
+                    self.eval_mutations_params["params_folder"] + "/" + x
+                    for x in os.listdir(self.eval_mutations_params["params_folder"])
+                    if x.endswith(".params")
+                ]
+
         params = " ".join(params)
         patches = " ".join(patches)
 
         options = f"-relax:default_repeats 1 -constant_seed true -jran {self.eval_mutations_params["seed"]}"
-        options += f" -extra_res_fa {params} -extra_patch_fa {patches}"
+        if params != "":
+            options += f" -extra_res_fa {params}"
+        if patches != "":
+            options += f" -extra_patch_fa {patches}"
 
         prs.pyrosetta.init(options=options)
 
@@ -231,9 +238,15 @@ class GeneticAlgorithm(Optimizer):
         return final_energy_starting_pose - final_energy_mutated_pose
 
     def init_population(
-        self, chain, sequences_initial, mutations_probabilities, max_attempts=1000
+        self,
+        chain,
+        sequences_initial,
+        current_iteration,
+        mutations_probabilities,
+        max_attempts=1000,
     ):
         self.logger.info("Initializing the population")
+        self.current_iteration = current_iteration
         # Initial checks
         if sequences_initial is None:
             self.logger.error("No initial sequences provided")
@@ -524,13 +537,17 @@ class GeneticAlgorithm(Optimizer):
 
         population_size = df_to_empty.shape[0]
 
-        # Changes the values by state
-        # Precompute the columns that need to be negated
-        columns_to_negate = [s for s in metric_states if metric_states[s] == "Positive"]
-        # Apply the negation using vectorized operations
-        df_to_empty[columns_to_negate] = df_to_empty[columns_to_negate].map(
-            lambda x: -x
-        )
+        # Vectorized approach to negate columns
+        columns_to_negate = [
+            metric
+            for s in metric_states
+            for metric, state in metric_states[s].items()
+            if state is True
+        ]
+
+        # Use pandas boolean indexing for efficient column negation
+        negate_mask = df_to_empty.columns.isin(columns_to_negate)
+        df_to_empty.loc[:, negate_mask] *= -1
 
         values = df_to_empty.values
         ranks = np.zeros(population_size, dtype=int)
@@ -567,6 +584,96 @@ class GeneticAlgorithm(Optimizer):
 
     # TODO implement the following sort: https://github.com/smkalami/nsga2-in-python/blob/main/nsga2.py
 
+    def add_frustration_files(self):
+        """
+        Add frustration files from the current and previous iteration's frustrar folders.
+        Reads equivalence files and maps sequences to their corresponding result files.
+        """
+        for offset in [1, 2]:
+            iteration = str(self.current_iteration - offset).zfill(3)
+            frustrar_folder = os.path.join(self.folder_name, iteration, "frustrar")
+
+            if not os.path.exists(frustrar_folder):
+                continue
+
+            equivalence_file = os.path.join(
+                frustrar_folder, "results", "equivalences.csv"
+            )
+
+            try:
+                equivalences = pd.read_csv(equivalence_file)
+
+                # Map sequences to their result files
+                self.sequence_to_file_frst.update(
+                    {
+                        row["Sequence"]: os.path.join(
+                            frustrar_folder,
+                            "results",
+                            f"{row['Names']}_singleresidue.csv",
+                        )
+                        for _, row in equivalences.iterrows()
+                    }
+                )
+
+            except (FileNotFoundError, pd.errors.EmptyDataError) as e:
+                print(f"Error processing {equivalence_file}: {str(e)}")
+                raise e
+
+    def add_frustrationBias_to_mutations(
+        self, sequence_to_mutate: str, chain: str
+    ) -> list:
+        """
+        Calculate frustration bias for mutations based on previous iteration data.
+
+        Args:
+            sequence_to_mutate: The sequence to analyze for frustration
+            chain: The protein chain identifier
+
+        Returns:
+            list: Normalized frustration indices or default values if data unavailable
+        """
+        # Default length for fallback case
+        default_length = len(self.mutable_aa[chain])
+
+        # Check if frustration data exists
+        frustrar_folder = os.path.join(
+            self.folder_name, f"{str(self.current_iteration - 1).zfill(3)}", "frustrar"
+        )
+
+        if not os.path.exists(frustrar_folder):
+            return [1] * default_length
+
+        # Check if sequence mapping exists
+        if sequence_to_mutate not in self.sequence_to_file_frst:
+            self.logger.error(f"No name found for the sequence: {sequence_to_mutate}")
+            return [1] * default_length
+
+        try:
+            # Read frustration data
+            frst_file = self.sequence_to_file_frst[sequence_to_mutate]
+            single_frst = pd.read_csv(frst_file)
+
+            if "FrstIndex" not in single_frst.columns:
+                self.logger.error(f"FrstIndex column not found in {frst_file}")
+                return [1] * default_length
+
+            frst_index = single_frst["FrstIndex"]
+
+            # Handle edge case where all values are the same
+            if frst_index.min() == frst_index.max():
+                return [1] * default_length
+
+            # Normalize values between 0 and 1, then invert
+            normalized_frst = 1 - (frst_index - frst_index.min()) / (
+                frst_index.max() - frst_index.min()
+            )
+
+            return list(normalized_frst)
+
+        except Exception as e:
+            self.logger.error(f"Error processing frustration data: {str(e)}")
+            return [1] * default_length
+
     def generate_mutation_sequence(
         self,
         chain,
@@ -577,18 +684,42 @@ class GeneticAlgorithm(Optimizer):
     ):
         sequence_to_mutate_list = list(sequence_to_mutate)
         mut = []
+
+        mutable_positions = list(self.mutable_aa[chain].keys())
+        # generate a list of 1 for each mutable position
+
+        mutable_positions_probability = self.add_frustrationBias_to_mutations(
+            sequence_to_mutate, chain
+        )
+
         if self.mutable_aa == {}:
             raise ValueError("No mutable amino acids provided")
         for _ in range(self.rng.choice(list(range(min_mutations, max_mutations + 1)))):
-            position = self.rng.choice(list(self.mutable_aa[chain].keys()))
-            if mutations_probabilities is None:
+            try:
+                position = self.rng.choices(
+                    mutable_positions, mutable_positions_probability, k=1
+                )[0]
+            except Exception as e:
+                self.logger.error(f"Error selecting the position: {e}")
+            if mutations_probabilities is None or mutations_probabilities == {}:
                 new_aa = self.rng.choice(self.mutable_aa[chain][position])
             else:
-                new_aa = self.rng.choices(
-                    self.mutable_aa[chain][position],
-                    mutations_probabilities[chain][str(position)],
-                    k=1,
-                )[0]
+                if position not in mutations_probabilities[chain].keys():
+                    self.logger.error(
+                        f"Position {position} not in the mutation probabilities"
+                    )
+                    self.logger.error(
+                        f"Available probabilities: {mutations_probabilities[chain].keys()}"
+                    )
+                    self.logger.error(
+                        f"Available positions: {self.mutable_aa[chain].keys()}"
+                    )
+                else:
+                    new_aa = self.rng.choices(
+                        self.mutable_aa[chain][position],
+                        mutations_probabilities[chain][position],
+                        k=1,
+                    )[0]
             sequence_to_mutate_list[position] = new_aa
             mut.append((sequence_to_mutate[position], position, new_aa))
 
@@ -597,6 +728,9 @@ class GeneticAlgorithm(Optimizer):
     def mutation_on_crossover(self, parent_sequences, chain, mutations_probabilities):
         child_sequences = []
         sequences_to_add = []
+        mutations = []
+        starting_sequences = []
+        n_seqs_added = 0
         attemps = 0
         while len(child_sequences) < self.population_size:
             seq_index = self.data.nsequences(chain)
@@ -605,27 +739,18 @@ class GeneticAlgorithm(Optimizer):
                 chain=chain,
                 sequence_to_mutate=sequence_to_start_from,
                 min_mutations=self.min_mutation_per_iteration,
-                max_mutations_=self.max_mutation_per_iteration,
+                max_mutations=self.max_mutation_per_iteration,
                 mutations_probabilities=mutations_probabilities,
             )
             # TODO may need to adapt to a more than one mutation per iteration
             # Evaluate the mutation with rosetta
-            if self.eval_mutations:
-                dEnergy = self.local_relax(
-                    residues=[mut[0][1]],
-                    moving_chain=chain,
-                    starting_sequence=sequence_to_start_from,
-                    mutated_sequence=child_sequence,
-                    cst_file=self.eval_mutations_params["cst_file"],
-                )
-                if dEnergy < self.eval_mutations_params["min_energy_threshold"]:
-                    continue
-            # If the sequence does not exist, add it to the list of sequences to add
             if (
                 not self.data.sequence_exists(chain, child_sequence)
                 and child_sequence not in child_sequences
             ):
                 child_sequences.append(child_sequence)
+                mutations.append(mut)
+                starting_sequences.append(sequence_to_start_from)
                 sequences_to_add.append(
                     Sequence(
                         sequence=child_sequence,
@@ -645,7 +770,22 @@ class GeneticAlgorithm(Optimizer):
                     f"Exceeded the number of attempts to generate a new sequence"
                 )
             attemps += 1
-        return sequences_to_add
+
+            if len(child_sequences) == self.population_size and self.eval_mutations:
+                # Evaluate the mutation with rosetta
+                self.logger.info("Evaluating the mutations")
+                child_sequences, mutations, starting_sequences, n_seqs_added = (
+                    self.evaluate_mutations_on_sequence(
+                        mutated_sequences=child_sequences,
+                        mutations=mutations,
+                        chain=chain,
+                        starting_sequences=starting_sequences,
+                        n_seqs_added=n_seqs_added,
+                    )
+                )
+                print(f"Number of sequences added: {n_seqs_added}")
+
+        return child_sequences, sequences_to_add
 
     # Function to evaluate a single mutation
     def evaluate_single_mutation(self, arg):
@@ -653,7 +793,7 @@ class GeneticAlgorithm(Optimizer):
         dEnergy = 0
         child_sequence, mut, sequence_to_start_from, chain = arg
         if not os.path.exists("debug"):
-            os.mkdir("debug")
+            os.makedirs("debug", exist_ok=True)
         try:
             dEnergy = self.local_relax(
                 residues=[mut[0][1] + 1],
@@ -672,7 +812,6 @@ class GeneticAlgorithm(Optimizer):
                 f.write(f"dEnergy: {dEnergy}\n")
                 f.write(f"Error: {e}\n")
                 f.write(f"*** Done envaluating mutation ***\n")
-            
 
         return child_sequence, mut, sequence_to_start_from, dEnergy
 
@@ -751,12 +890,15 @@ class GeneticAlgorithm(Optimizer):
         current_iteration=None,
         mutations_probabilities=None,
     ):
+        self.current_iteration = current_iteration
         child_sequences = []
         sequences_to_add = []
         mutations = []
         starting_sequences = []
         n_seqs_added = 0
         cycle_pos = current_iteration % self.cycle_length
+
+        self.add_frustration_files()
 
         if cycle_pos < self.crossover_iterations:
             self.logger.info(f"Iteration {current_iteration} - Crossover")
@@ -802,8 +944,10 @@ class GeneticAlgorithm(Optimizer):
                     self.logger.info(
                         f"Exceeded the number of attempts to generate a new sequence, switching to mutation"
                     )
-                    sequences_to_add = self.mutation_on_crossover(
-                        parent_sequences, chain
+                    child_sequences, sequences_to_add = self.mutation_on_crossover(
+                        parent_sequences,
+                        chain,
+                        mutations_probabilities=mutations_probabilities,
                     )
                     break
 
@@ -820,6 +964,7 @@ class GeneticAlgorithm(Optimizer):
             while len(child_sequences) < self.population_size:
                 seq_index = self.data.nsequences(chain)
                 sequence_to_start_from = self.rng.choice(parent_sequences)
+                self.parent_sequences = parent_sequences
                 child_sequence, mut = self.generate_mutation_sequence(
                     chain=chain,
                     sequence_to_mutate=sequence_to_start_from,
@@ -937,7 +1082,9 @@ class GeneticAlgorithm(Optimizer):
                 self.logger.info(
                     f"Exceeded the number of attempts to generate a new sequence, switching to mutation"
                 )
-                sequences_to_add = self.mutation_on_crossover(parent_sequences, chain)
+                child_sequences, sequences_to_add = self.mutation_on_crossover(
+                    parent_sequences, chain
+                )
                 break
 
             general_attempt += 1

@@ -1,29 +1,30 @@
 import io
 import os
-import subprocess
 
 import pandas as pd
 from pkg_resources import Requirement, resource_stream
 
 from mood.metrics import Metric
+from mood.metrics.scripts.thread_rosetta_metrics import ProcessRelax
 
 
 class RosettaMetrics(Metric):
     def __init__(
         self,
-        params_folder,
         cpus,
         seed,
         native_pdb,
+        params_folder=None,
         distances_file=None,
         cst_file=None,
         ligand_chain=None,
     ):
         super().__init__()
+        # State if the state is positive then is true
         self.state = {
-            "Relax_Energy": "negative",
-            "Hydrophobic_Score": "negative",
-            "Salt_Bridges": "positive",
+            "Relax_Energy": False,
+            "Hydrophobic_Score": False,
+            "Salt_Bridges": True,
         }
         self._objectives = ["Relax_Energy"]
         self.name = "rosettaMetrics"
@@ -33,14 +34,14 @@ class RosettaMetrics(Metric):
         self.native_pdb = native_pdb
         self.distances_file = distances_file
         if self.distances_file is not None:
-            self.state["distances"] = "negative"
+            self.state["distances"] = False
         self.cst_file = cst_file
         self.ligand_chain = ligand_chain
         # If there is a ligand add the metrics related to the ligand
         if self.ligand_chain is not None:
             self._objectives.append("Interface_Score")
-            self.state["Interface_Score"] = "negative"
-            self.state["Apo_Score"] = "negative"
+            self.state["Interface_Score"] = False
+            self.state["Apo_Score"] = False
 
     @property
     def objectives(self):
@@ -48,43 +49,19 @@ class RosettaMetrics(Metric):
 
     @objectives.setter
     def objectives(self, value):
+        if not isinstance(value, list):
+            raise ValueError("Objectives must be a list")
+        if not all(isinstance(item, str) for item in value):
+            raise ValueError("All objectives must be strings")
         self._objectives = value
 
-    def _copyScriptFile(
-        self, output_folder, script_name, no_py=False, subfolder=None, hidden=True
-    ):
-        """
-        Copy a script file from the MultiObjectiveOptimization package.
-
-        Parameters
-        ==========
-
-        """
-        # Get script
-        base_path = "mood/metrics/scripts"
-        if subfolder is not None:
-            base_path = os.path.join(base_path, subfolder)
-
-        script_path = os.path.join(base_path, script_name)
-        with resource_stream(
-            Requirement.parse("MultiObjectiveOptimization"), script_path
-        ) as script_file:
-            script_file = io.TextIOWrapper(script_file)
-
-            # Adjust script name if no_py is True
-            if no_py:
-                script_name = script_name.replace(".py", "")
-
-            # Build the output path
-            if hidden:
-                output_path = os.path.join(output_folder, f".{script_name}")
-            else:
-                output_path = os.path.join(output_folder, script_name)
-
-            # Write the script to the output folder
-            with open(output_path, "w") as sof:
-                for line in script_file:
-                    sof.write(line)
+    def clean(self, folder_name, iteration, max_iteration):
+        if iteration != max_iteration:
+            relax_folder = f"{folder_name}/{str(iteration).zfill(3)}/relax"
+            if os.path.exists(relax_folder):
+                for file in os.listdir(relax_folder):
+                    if file.endswith(".pdb") or file.endswith(".pdb.gz"):
+                        os.remove(f"{relax_folder}/{file}")
 
     def compute(self, sequences, iteration, folder_name, chain):
 
@@ -92,6 +69,9 @@ class RosettaMetrics(Metric):
         df = pd.DataFrame(sequences, columns=["Sequence"])
 
         sequences = df["Sequence"].tolist()
+
+        if sequences == []:
+            raise ValueError("No sequences to evaluate")
 
         output_folder = f"{folder_name}/{str(iteration).zfill(3)}/relax"
         if not os.path.exists(output_folder):
@@ -106,45 +86,49 @@ class RosettaMetrics(Metric):
                 # Write each sequence to the file
                 file.write(sequence + "\n")
 
-        # Copy the script to be run in mpi
-        self._copyScriptFile(
-            script_name="mpi_rosetta_metrics.py", output_folder=folder_name
-        )
-
         # TODO may be a good idea to copy the params folder to the input folder of the mood
-
         try:
-            cmd = f"mpirun -np {self.cpus} "
-            cmd += f"python {folder_name}/.mpi_rosetta_metrics.py "
-            cmd += f"--seed {self.seed} "
-            cmd += f"--output_folder {output_folder} "
-            cmd += f"--sequences_file {sequences_file} "
-            cmd += f"--params_folder {self.params_folder} "
-            cmd += f"--native_pdb {self.native_pdb} "
-            cmd += f"--distances {self.distances_file} "
-            cmd += f"--cst_file {self.cst_file} "
-            cmd += f"--ligand_chain {self.ligand_chain}"
+            if self.params_folder is None:
+                patches = []
+                params = []
+            elif not os.path.exists(self.params_folder):
+                print(f"Warning: Directory {self.params_folder} does not exist")
+                patches = []
+                params = []
+            else:
+                patches = [
+                    self.params_folder + "/" + x
+                    for x in os.listdir(self.params_folder)
+                    if x.endswith(".txt")
+                ]
+                params = [
+                    self.params_folder + "/" + x
+                    for x in os.listdir(self.params_folder)
+                    if x.endswith(".params")
+                ]
 
-            proc = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=True,
+            # "-relax:range:cycles 1000"
+            options = f"-relax:default_repeats 1 -relax:range:cycles 5 -constant_seed true -jran {self.seed}"
+            if params != []:
+                params = " ".join(params)
+                options += f" -extra_res_fa {params}"
+            if patches != []:
+                patches = " ".join(patches)
+                options += f" -extra_patch_fa {patches}"
+
+            process_relax = ProcessRelax(options)
+            process_relax.main(
+                output_folder=output_folder,
+                sequences_file=sequences_file,
+                native_pdb=self.native_pdb,
+                distance_file=self.distances_file,
+                cst_file=self.cst_file,
+                ligand_chain=self.ligand_chain,
+                n_processes=self.cpus,
             )
-            stdout, stderr = proc.communicate()
-            print("Output:", stdout.decode())
-            print("Error:", stderr.decode())
-            with open(f"{output_folder}/rosetta.out", "w") as f:
-                f.write(stdout.decode())
-            with open(f"{output_folder}/rosetta.out", "w") as f:
-                f.write(stdout.decode())
+
         except Exception as e:
             raise Exception(f"An error occurred while running the Rosetta metrics: {e}")
-
-        # Delete the pdb files
-        for file in os.listdir(output_folder):
-            if file.endswith(".pdb"):
-                os.remove(os.path.join(output_folder, file))
 
         if not os.path.exists(f"{output_folder}/rosetta_scores.csv"):
             raise ValueError("The Rosetta metrics did not run successfully")

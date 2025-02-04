@@ -10,7 +10,9 @@ def mutation_probabilities_calculation_proteinMPNN(
     native_pdb,
     seed,
     population_size,
-    fixed_positions,
+    fixed_positions=None,
+    generate_initial_seq=False,
+    temp="0.1",
 ):
 
     from mood.metrics.ProteinMPNN.protein_mpnn_run import mpnn_main
@@ -31,9 +33,12 @@ def mutation_probabilities_calculation_proteinMPNN(
         path_for_fixed_positions = f"{out_folder}/fixed_positions.json"
 
         main_parse_multiple_chains(
-            input_path=f"{folder_name}/input",
+            input_path=f"{folder_name}/input/scafold",
             output_path=path_for_parsed_pdbs,
         )
+
+        if not os.path.exists(path_for_parsed_pdbs):
+            raise ValueError(f"Fixed positions file not found: {path_for_parsed_pdbs}")
 
         from mood.metrics.ProteinMPNN.make_fixed_positions_dict import (
             main_make_fixed_positions,
@@ -46,6 +51,11 @@ def mutation_probabilities_calculation_proteinMPNN(
             position_list=fixed_positions,
         )
 
+        if not os.path.exists(path_for_fixed_positions):
+            raise ValueError(
+                f"Fixed positions file not found: {path_for_fixed_positions}"
+            )
+
         # Get the conditional probabilities
         mpnn_main(
             jsonl_path=path_for_parsed_pdbs,
@@ -54,45 +64,56 @@ def mutation_probabilities_calculation_proteinMPNN(
             out_folder=out_folder,
             seed=seed,
             num_seq_per_target=1,
-            sampling_temp="0.3",
+            sampling_temp=temp,
             suppress_print=True,
             conditional_probs_only=True,
         )
 
-        # Calculate the 100 initial sequences
-        mpnn_main(
-            jsonl_path=path_for_parsed_pdbs,
-            pdb_path_chains=chain,
-            fixed_positions_jsonl=path_for_fixed_positions,
-            out_folder=out_folder,
-            seed=seed,
-            num_seq_per_target=population_size,
-            sampling_temp="0.3",
-            suppress_print=True,
-        )
+        if generate_initial_seq:
+            # Calculate the 100 initial sequences
+            mpnn_main(
+                jsonl_path=path_for_parsed_pdbs,
+                pdb_path_chains=chain,
+                fixed_positions_jsonl=path_for_fixed_positions,
+                out_folder=out_folder,
+                seed=seed,
+                num_seq_per_target=population_size - 1,
+                sampling_temp=temp,
+                suppress_print=True,
+            )
 
     else:
         # Get the conditional probabilities
+        print("Calculating probabilities")
         mpnn_main(
             pdb_path=native_pdb,
             pdb_path_chains=chain,
             out_folder=out_folder,
             seed=seed,
             num_seq_per_target=1,
-            sampling_temp="0.3",
+            sampling_temp=temp,
             suppress_print=True,
             conditional_probs_only=True,
         )
-        # Calculate the 100 initial sequences
-        mpnn_main(
-            pdb_path=native_pdb,
-            pdb_path_chains=chain,
-            out_folder=out_folder,
-            seed=seed,
-            num_seq_per_target=population_size,
-            sampling_temp="0.3",
-            save_probs=True,
-            suppress_print=True,
+        if generate_initial_seq:
+            # Calculate the 100 initial sequences
+            print("Generating initial seqs")
+            mpnn_main(
+                pdb_path=native_pdb,
+                pdb_path_chains=chain,
+                out_folder=out_folder,
+                seed=seed,
+                num_seq_per_target=population_size - 1,
+                sampling_temp=temp,
+                save_probs=True,
+                suppress_print=True,
+            )
+
+    if not os.path.exists(
+        f"{out_folder}/conditional_probs_only/{native_pdb.split('/')[-1].split('.')[0]}.npz"
+    ):
+        raise ValueError(
+            f"Conditional probabilities file not found: {out_folder}/conditional_probs_only/{native_pdb.split('/')[-1].split('.')[0]}.npz"
         )
 
     loaded_data = np.load(
@@ -110,7 +131,7 @@ def mutation_probabilities_calculation_proteinMPNN(
 
     # Get the dictionary of the probabilities
     for i in range(len(probs[0])):
-        mutation_probabilities[str(i)] = probs[0][i].tolist()[:-1]
+        mutation_probabilities[i] = probs[0][i].tolist()[:-1]
 
     with open(f"{out_folder}/mutation_probs.json", "w") as f:
         json.dump(mutation_probabilities, f)
@@ -118,6 +139,12 @@ def mutation_probabilities_calculation_proteinMPNN(
     from Bio import SeqIO
 
     seq_proteinmpnn = []
+    if not os.path.exists(
+        f"{out_folder}/seqs/{native_pdb.split('/')[-1].split('.')[0]}.fa"
+    ):
+        raise ValueError(
+            f"Sequences file not found: {out_folder}/seqs/{native_pdb.split('/')[-1].split('.')[0]}.fa"
+        )
     with open(
         f"{out_folder}/seqs/{native_pdb.split('/')[-1].split('.')[0]}.fa", "r"
     ) as f:

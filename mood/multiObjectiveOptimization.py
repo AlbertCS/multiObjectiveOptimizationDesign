@@ -98,6 +98,7 @@ class MultiObjectiveOptimization:
         max_iteration: int = 100,
         seed=12345,
         native_pdb=None,
+        pdb_scafold=None,
         chains="A",
         data=None,
         mutation_rate=None,
@@ -121,6 +122,10 @@ class MultiObjectiveOptimization:
         self.seed = seed
         random.seed(seed)
         self.native_pdb = native_pdb
+        if pdb_scafold is None:
+            self.pdb_scafold = native_pdb
+        else:
+            self.pdb_scafold = pdb_scafold
         self.chains = chains
         if data is None:
             self.data = AlgorithmDataSingleton()
@@ -138,6 +143,7 @@ class MultiObjectiveOptimization:
         self.sequences = {chain: {} for chain in self.chains}
         self.sequences_file_name = "sequences.pkl"
         self.data_frame_file_name = "data_frame.pkl"
+        self.fixed_positions = fixed_positions
 
         # Load initial sequences if necessary
         if starting_sequences is None:
@@ -146,9 +152,7 @@ class MultiObjectiveOptimization:
             with open(starting_sequences, "rb") as f:
                 self.starting_sequences = pickle.load(f)
 
-        if mutable_aa is None:
-            self.mutable_aa = self._generate_all_aa_mutable()
-        else:
+        if mutable_aa is not None:
             if offset is None:
                 self.mutable_aa = mutable_aa
             else:
@@ -157,9 +161,15 @@ class MultiObjectiveOptimization:
                     for chain, positions in mutable_aa.items()
                 }
 
+        self.mutation_probability = mutation_probability
+        self.mutations_probabilities = mutations_probabilities
+
         if mutation_probability:
             self.mutations_probabilities = mutations_probabilities
             self.mutation_probability = mutation_probability
+            self.mutable_aa = self._generate_all_aa_mutable()
+
+        if mutable_aa is None:
             self.mutable_aa = self._generate_all_aa_mutable()
 
         self.recombination_with_mutation = recombination_with_mutation
@@ -177,8 +187,8 @@ class MultiObjectiveOptimization:
             # Drop the fixed positions from the mutable_aa
             for chain in self.chains:
                 for pos in self.fixed_positions[chain]:
-                    if str(pos) in self.mutable_aa[chain]:
-                        self.mutable_aa[chain].pop(str(pos))
+                    if pos in self.mutable_aa[chain]:
+                        self.mutable_aa[chain].pop(pos)
 
         if isinstance(chains, str):
             self.chains = [chains]
@@ -211,6 +221,7 @@ class MultiObjectiveOptimization:
                     mutable_aa=self.mutable_aa,
                     eval_mutations=eval_mutations,
                     eval_mutations_params=eval_mutations_params,
+                    folder_name=folder_name,
                 )
 
     def _generate_all_aa_mutable(self):
@@ -242,15 +253,48 @@ class MultiObjectiveOptimization:
         for chain in self.chains:
             mutable_aa[chain] = {}
             for i in range(0, len(seq_chains[chain][0])):
-                mutable_aa[chain][str(i)] = all_aa
+                mutable_aa[chain][i] = all_aa
         return mutable_aa
 
     def _get_seq_from_pdb(self, structure_id="initial_structure", pdb_file=None):
 
+        three_aa = [
+            "ALA",
+            "ARG",
+            "ASN",
+            "ASP",
+            "ASX",
+            "CYS",
+            "GLU",
+            "GLN",
+            "GLX",
+            "GLY",
+            "HIS",
+            "ILE",
+            "LEU",
+            "LYS",
+            "MET",
+            "PHE",
+            "SER",
+            "THR",
+            "TRP",
+            "TYR",
+            "VAL",
+            "MSE",
+        ]
+        three_not_aa = ["HOH", "HCA", "FAD"]
         parser = PDBParser()
         structure = parser.get_structure(structure_id, pdb_file)
         chains = {
-            chain.id: [seq1("".join(residue.resname for residue in chain))]
+            chain.id: [
+                seq1(
+                    "".join(
+                        residue.resname
+                        for residue in chain
+                        if residue.resname not in three_not_aa
+                    )
+                )
+            ]
             for chain in structure.get_chains()
         }
         return chains
@@ -263,8 +307,13 @@ class MultiObjectiveOptimization:
         if not os.path.exists(self.folder_name + "/input"):
             os.mkdir(self.folder_name + "/input")
         self.folders["input"] = self.folder_name + "/input"
-
         shutil.copy(self.native_pdb, self.folders["input"])
+
+        if self.pdb_scafold is not None:
+            if not os.path.exists(self.folder_name + "/input/scafold"):
+                os.mkdir(self.folder_name + "/input/scafold")
+            self.folders["scafold"] = self.folder_name + "/input/scafold"
+            shutil.copy(self.pdb_scafold, self.folders["scafold"])
 
     def check_Iter_finished(self, iteration, sequences_pkl, dataframe_pkl):
         """
@@ -534,7 +583,7 @@ class MultiObjectiveOptimization:
                 # For each chain, initialize the population
                 for chain in self.chains:
                     # If we initialize the population with proteinMPNN and using mutation probabilities
-                    if self.mutation_probability:
+                    if self.mutation_probability and self.mutations_probabilities == {}:
 
                         from mood.utils.utils_proteinMPNN import (
                             mutation_probabilities_calculation_proteinMPNN,
@@ -543,16 +592,26 @@ class MultiObjectiveOptimization:
                         self.logger.info(
                             "Calculating the mutation probabilities with ProteinMPNN"
                         )
+                        if self.starting_sequences is None:
+                            generate_initial_seq = True
                         self.mutations_probabilities[chain], seq_proteinmpnn = (
                             mutation_probabilities_calculation_proteinMPNN(
                                 chain=chain,
                                 folder_name=self.folder_name,
-                                native_pdb=self.native_pdb,
+                                native_pdb=self.pdb_scafold,
                                 seed=self.seed,
                                 population_size=self.population_size,
                                 fixed_positions=self.fixed_positions,
+                                generate_initial_seq=generate_initial_seq,
                             )
                         )
+
+                        # Remove the fixed positions from the mutations_probabilities
+                        if self.fixed_positions:
+                            for pos in self.fixed_positions[chain]:
+                                if pos in self.mutations_probabilities[chain]:
+                                    self.mutations_probabilities[chain].pop(pos)
+
                         self.starting_sequences = {}
                         self.starting_sequences[chain] = seq_proteinmpnn
 
@@ -569,6 +628,7 @@ class MultiObjectiveOptimization:
                         self.optimizer.init_population(
                             chain=chain,
                             sequences_initial=seq_chains[chain],
+                            current_iteration=self.current_iteration,
                             mutations_probabilities=self.mutations_probabilities,
                         )
                     )
@@ -622,6 +682,16 @@ class MultiObjectiveOptimization:
                     metric_df = metric_df.merge(metric_result, on="Sequence")
                     metric_states[metric.name] = metric.state
                     metric_objectives.extend(metric.objectives)
+
+                # Clean the unnecessary metric results
+                # Delete the pdb files
+                for metric in self.metrics:
+                    self.logger.info(f"Cleaning {metric.name} ...")
+                    metric.clean(
+                        folder_name=self.folder_name,
+                        iteration=self.current_iteration,
+                        max_iteration=self.max_iteration,
+                    )
 
                 # Evaluate the population and rank the individuals
                 self.logger.info("Evaluating and ranking the population")

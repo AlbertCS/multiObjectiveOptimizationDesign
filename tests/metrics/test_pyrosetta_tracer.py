@@ -2,6 +2,9 @@ import glob
 import json
 import os
 import pickle
+import shutil
+import sys
+import trace
 
 import numpy as np
 import pandas as pd
@@ -457,113 +460,92 @@ class Mpi_relax:
             df.to_csv(f"{output_folder}/rosetta_scores.csv", index=False)
 
 
-import argparse
-
-
-def parse_arguments():
-    parser = argparse.ArgumentParser(description="MPI Relaxation Script")
-    parser.add_argument(
-        "--output_folder",
-        type=str,
-        default="output_relax",
-        help="Output directory for the job",
-    )
-    parser.add_argument(
-        "--native_pdb", type=str, required=True, help="Path to the native PDB file"
-    )
-    parser.add_argument(
-        "--params_folder", type=str, required=True, help="Path to the parameters folder"
-    )
-    parser.add_argument(
-        "--seed", type=int, default=12345, help="Random seed for the job"
-    )
-    parser.add_argument(
-        "--sequences_file",
-        type=str,
-        default="sequences.txt",
-        help="Input file containing sequences",
-    )
-    parser.add_argument(
-        "--distances",
-        default=None,
-        type=str,
-        required=True,
-        help="File containing distances between residues",
-    )
-    parser.add_argument(
-        "--cst_file",
-        default=None,
-        type=str,
-        help="File containing constraints for the job",
-    )
-    parser.add_argument(
-        "--ligand_chain",
-        default=None,
-        type=str,
-        help="Indicate the chain of the ligand",
-    )
-
-    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    args = parse_arguments()
-    distances = None
 
-    if args.params_folder != None:
+    params_folder = "/gpfs/projects/bsc72/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/hmfo/params"
+    seed = 1235
+    output_folder = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/metrics/testt"
+    native_pdb = "/gpfs/projects/bsc72/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/hmfo/AF-A0A9E4RQT2@HFFCA@146.pdb"
+    # distances = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/distances.json"
+    sequences_file = "/gpfs/projects/bsc72/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/hmfo/sequences.txt"
+    # cst_file = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/Felip9/FeLip9-PET-1_CA.cst"
+
+    if params_folder is None:
+        patches = []
+        params = []
+    elif not os.path.exists(params_folder):  # Add this check
+        print(f"Warning: Directory {params_folder} does not exist")
+        patches = []
+        params = []
+    else:
         patches = [
-            args.params_folder + "/" + x
-            for x in os.listdir(args.params_folder)
+            params_folder + "/" + x
+            for x in os.listdir(params_folder)
             if x.endswith(".txt")
         ]
         params = [
-            args.params_folder + "/" + x
-            for x in os.listdir(args.params_folder)
+            params_folder + "/" + x
+            for x in os.listdir(params_folder)
             if x.endswith(".params")
         ]
-        if patches == []:
-            patches = None
-        if params == []:
-            raise ValueError(
-                f"Params files were not found in the given folder: {args.params_folder}!"
-            )
 
     # Prom a list of path files, create a string with all the paths separated by a space
-    params = " ".join(params)
-    patches = " ".join(patches)
-
-    print(f"Params:\n{params}")
-    print(f"Patches:\n{patches}")
-
-    options = f"-relax:default_repeats 1 -constant_seed true -jran {args.seed}"
-    options += f" -extra_res_fa {params} -extra_patch_fa {patches}"
+    options = f"-relax:default_repeats 1 -constant_seed true -jran {seed}"
+    if params != []:
+        params = " ".join(params)
+        options += f" -extra_res_fa {params}"
+    if patches != []:
+        patches = " ".join(patches)
+        options += f" -extra_patch_fa {patches}"
 
     prs.pyrosetta.init(options=options)
 
     mpi_relax = Mpi_relax()
 
-    if not os.path.exists(args.output_folder):
-        os.makedirs(args.output_folder)
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
 
-    if not os.path.exists(args.native_pdb):
-        raise ValueError(f"The native pdb file {args.native_pdb} does not exist")
+    if not os.path.exists(native_pdb):
+        raise ValueError(f"The native pdb file {native_pdb} does not exist")
 
-    if args.distances is not None:
-        if args.distances.endswith(".pkl"):
-            with open(args.distances, "rb") as file:
+    if distances is not None:
+        if distances.endswith(".pkl"):
+            with open(distances, "rb") as file:
                 distances = pickle.load(file)
         elif args.distances.endswith(".json"):
-            with open(args.distances, "r") as file:
+            with open(distances, "r") as file:
                 distances = json.load(file)
 
-    if not os.path.exists(args.sequences_file):
-        raise ValueError(f"The sequence file {args.sequences_file} does not exists")
+    if not os.path.exists(sequences_file):
+        raise ValueError(f"The sequence file {sequences_file} does not exists")
 
-    mpi_relax.main(
-        output_folder=args.output_folder,
-        sequences_file=args.sequences_file,
-        native_pdb=args.native_pdb,
-        distance_dict=distances,
-        cst_file=args.cst_file,
-        ligand_chain=args.ligand_chain,
+    tracer = trace.Trace(
+        ignoredirs=[sys.prefix, sys.exec_prefix],
+        ignoremods=[
+            "inspect",
+            "contextlib",
+            "_bootstrap",
+            "_weakrefset",
+            "abc",
+            "posixpath",
+            "genericpath",
+            "textwrap",
+        ],
+        trace=1,
+        count=0,
+    )
+
+    # by default trace goes to stdout
+    # redirect to a different file for each processes
+
+    tracer.runfunc(
+        mpi_relax.main(
+            output_folder=output_folder,
+            sequences_file=sequences_file,
+            native_pdb=native_pdb,
+            distance_dict=distances,
+            cst_file=cst_file,
+        )
     )

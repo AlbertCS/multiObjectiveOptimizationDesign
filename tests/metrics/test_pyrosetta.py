@@ -30,6 +30,7 @@ class Mpi_relax:
             fastrelax_mover.apply(test_pose)
             energy_final = sfxn(test_pose)
             dE[counter] = energy_final - energy_ini
+            test_pose.dump_pdb(f"{jd}.pdb")
             jd.output_decoy(test_pose)
 
         energy = [float(x) for x in dE.values()]
@@ -38,7 +39,7 @@ class Mpi_relax:
         if len(energy) == 0:
             raise ValueError("No energy values found")
 
-        mean_energy = sum(energy) / len(energy)
+        # mean_energy = sum(energy) / len(energy)
 
         return test_pose, energy_final
 
@@ -184,7 +185,7 @@ class Mpi_relax:
 
     def mutate_native_pose(self, pose, seq):
         for res, aa in zip(pose.residues, seq):
-            if res.name1() == "Z":
+            if str(res.name1()) == "Z" or str(res.name1()) == "X":
                 continue
             elif str(res.name1()) != str(aa):
                 toolbox.mutate_residue(pose, res.seqpos(), aa)
@@ -244,35 +245,52 @@ class Mpi_relax:
         distance_dict=None,
         native_pdb=None,
         cst_file=None,
+        ligand_chain=None,
         atom_pair_constraint_weight=1,
     ):
         # Initialize MPI
         comm = MPI.COMM_WORLD
         rank = comm.Get_rank()
         size = comm.Get_size()
-        sys.stdout = open("trace_{:04d}.txt".format(comm.rank), "w")
         # size = 4
-
+        print(f"+++++++++++++++++Rank {rank} of {size} is running++++++++++++++++++")
         # List of sequences to be relaxed
         sequences = []
         # Open the file in read mode
-        with open(sequences_file, "r") as file:
-            # Read the contents of the file
-            lines = file.readlines()
-            # Iterate over each line
-            for line in lines:
-                # Strip any leading/trailing whitespace and add to the list
-                sequences.append(line.strip())
+        try:
+            with open(sequences_file, "r") as file:
+                # Read the contents of the file
+                lines = file.readlines()
+                # Iterate over each line
+                for line in lines:
+                    # Strip any leading/trailing whitespace and add to the list
+                    sequences.append(line.strip())
+        except Exception as e:
+            print("Error reading the sequence file")
+            raise (ValueError(f"Error reading the sequence file: {e}"))
 
         # Initialize native pose
-        native_pose = prs.pyrosetta.pose_from_pdb(native_pdb)
+        try:
+            native_pose = prs.pyrosetta.pose_from_pdb(native_pdb)
+        except:
+            print("Error reading the native pdb")
+            raise (ValueError("Error reading the native pdb"))
 
-        # Get the distances dictionary
-        for key, value in distances.items():
-            if len(value[0]) == 3:
-                natom1 = native_pose.pdb_info().pdb2pose(value[0][0], value[0][1])
-                natom2 = native_pose.pdb_info().pdb2pose(value[1][0], value[1][1])
-                distances[key] = [(natom1, value[0][2]), (natom2, value[1][2])]
+        try:
+            if distance_dict != "None" and distance_dict is not None:
+                # Get the distances dictionary
+                for key, value in distances.items():
+                    if len(value[0]) == 3:
+                        natom1 = native_pose.pdb_info().pdb2pose(
+                            value[0][0], value[0][1]
+                        )
+                        natom2 = native_pose.pdb_info().pdb2pose(
+                            value[1][0], value[1][1]
+                        )
+                        distances[key] = [(natom1, value[0][2]), (natom2, value[1][2])]
+        except Exception as e:
+            print("Error reading the distance file")
+            raise (ValueError(f"Error reading the distance file: {e}"))
 
         # Initialize score function and relax mover
         sfxn = prs.rosetta.core.scoring.ScoreFunctionFactory.create_score_function(
@@ -285,43 +303,55 @@ class Mpi_relax:
         )
 
         # Apply constraints to the energy function
-        if cst_file is not None:
-            sfxn.set_weight(rosetta.core.scoring.ScoreType.res_type_constraint, 1)
-            # Define catalytic constraints
-            set_constraints = rosetta.protocols.constraint_movers.ConstraintSetMover()
-            # Add constraint file
-            set_constraints.constraint_file(cst_file)
-            # Add atom_pair_constraint_weight ScoreType
-            sfxn.set_weight(
-                rosetta.core.scoring.ScoreType.atom_pair_constraint,
-                atom_pair_constraint_weight,
-            )
-            # Turn on constraint with the mover
-            set_constraints.add_constraints(True)
-            set_constraints.apply(native_pose)
+        try:
+            if cst_file != "None" and cst_file is not None:
+                sfxn.set_weight(rosetta.core.scoring.ScoreType.res_type_constraint, 1)
+                # Define catalytic constraints
+                set_constraints = (
+                    rosetta.protocols.constraint_movers.ConstraintSetMover()
+                )
+                # Add constraint file
+                set_constraints.constraint_file(cst_file)
+                # Add atom_pair_constraint_weight ScoreType
+                sfxn.set_weight(
+                    rosetta.core.scoring.ScoreType.atom_pair_constraint,
+                    atom_pair_constraint_weight,
+                )
+                # Turn on constraint with the mover
+                set_constraints.add_constraints(True)
+                set_constraints.apply(native_pose)
+        except Exception as e:
+            print("Error reading the constraints file")
+            raise (ValueError(f"Error reading the constraints file: {e}"))
 
         # Initialize the fastRelax mover
-        fastrelax_mover = prs.rosetta.protocols.relax.FastRelax()
-        fastrelax_mover.set_scorefxn(sfxn)
+        try:
+            fastrelax_mover = prs.rosetta.protocols.relax.FastRelax()
+            fastrelax_mover.set_scorefxn(sfxn)
 
-        # Initialize filters and calculators
-        # initialize hydrophobic surface calculator
-        hydro_filter = (
-            prs.rosetta.protocols.denovo_design.filters.ExposedHydrophobicsFilter()
-        )
-        hydro_filter.set_sasa_cutoff(0)
-        hydro_filter.set_threshold(-1)
-        # initialize Salt bridge calculator
-        salt_bridges_calculator = (
-            prs.rosetta.protocols.pose_metric_calculators.SaltBridgeCalculator()
-        )
+            # Initialize filters and calculators
+            # initialize hydrophobic surface calculator
+            hydro_filter = (
+                prs.rosetta.protocols.denovo_design.filters.ExposedHydrophobicsFilter()
+            )
+            hydro_filter.set_sasa_cutoff(0)
+            hydro_filter.set_threshold(-1)
+            # initialize Salt bridge calculator
+            salt_bridges_calculator = (
+                prs.rosetta.protocols.pose_metric_calculators.SaltBridgeCalculator()
+            )
 
-        # Distribute sequences equally among processors
-        num_sequences = len(sequences)
-        sequences_per_proc = num_sequences // size
-        remainder = num_sequences % size
-        start_index = rank * sequences_per_proc + min(rank, remainder)
-        end_index = start_index + sequences_per_proc + (1 if rank < remainder else 0)
+            # Distribute sequences equally among processors
+            num_sequences = len(sequences)
+            sequences_per_proc = num_sequences // size
+            remainder = num_sequences % size
+            start_index = rank * sequences_per_proc + min(rank, remainder)
+            end_index = (
+                start_index + sequences_per_proc + (1 if rank < remainder else 0)
+            )
+        except Exception as e:
+            print("Error initializing the calculators")
+            raise (ValueError(f"Error initializing the calculators: {e}"))
 
         # Initialize all the datastructures
         relaxed_energies = []
@@ -331,120 +361,144 @@ class Mpi_relax:
         n_salt_bridges_iter = []
         distances_res = []
         # Each processor relaxes its assigned sequences
-        for i in range(start_index, end_index):
-            jd = prs.PyJobDistributor(
-                f"{output_folder}/decoy_R{rank}_I{i}", nstruct=1, scorefxn=sfxn_scorer
-            )
-            # Get the mutated sequence translated to a pose
-            pose = self.mutate_native_pose(native_pose, sequences[i])
-            # Relax the pose
-            test_pose, mean_energy = self.relax_sequence(
-                pose=pose,
-                jd=jd,
-                fastrelax_mover=fastrelax_mover,
-                sfxn=sfxn_scorer,
-            )
-            # Get the apo score
-            apo_score = self.calculate_Apo_Score(test_pose, sfxn_scorer, "L")
-            # Get the binding score
-            interface_score = self.calculate_Interface_Score(
-                test_pose, sfxn_scorer, "L"
-            )
-            # Apply the hydrophobic filter and get the score
-            hydro_filter.apply(test_pose)
-            hydrophobic_score = hydro_filter.compute(test_pose)
-            # Calculate the salt bridges
-            n_salt_bridges = salt_bridges_calculator.get(
-                key="salt_bridge", this_pose=test_pose
-            )
-            # Calculate the distances
-            res_distance = distance_dict.copy()
-            for key, value in distance_dict.items():
-                res_distance[key] = self.distance(pose, value[0], value[1])
-            # n_salt_bidges = self.get_salt_bridges(f"{job_output}_R{rank}_I{i}_0.pdb", "pdb")
-
-            # Gather results
-            relaxed_energies.append((i, mean_energy))
-            interface_scores.append((i, interface_score))
-            apo_scores.append((i, apo_score))
-            hydrophobic_scores.append((i, hydrophobic_score))
-            n_salt_bridges_iter.append((i, n_salt_bridges))
-            distances_res.append((i, res_distance))
-
-        # Gather results from all processors
-        all_relaxed_energies = comm.gather(relaxed_energies, root=0)
-        all_interface_scores = comm.gather(interface_scores, root=0)
-        all_apo_scores = comm.gather(apo_scores, root=0)
-        all_hydrophobic_scores = comm.gather(hydrophobic_scores, root=0)
-        all_salt_bridges = comm.gather(n_salt_bridges_iter, root=0)
-        all_distances_res = comm.gather(distances_res, root=0)
-
-        # Delete the pdbs
-        # Construct the pattern to match the files
-        # pattern = f"{output_folder}/decoy_R{rank}_*.pdb"
-
-        # # Find all files matching the pattern
-        # files_to_remove = glob.glob(pattern)
-
-        # Remove each file
-        for i in range(start_index, end_index):
-            try:
-                os.remove(f"{output_folder}/decoy_R{rank}_I{i}_0.pdb")
-            except OSError as e:
-                print(
-                    f"Error removing file {f"{output_folder}/decoy_R{rank}_I{i}_0.pdb"}: {e.strerror}"
+        try:
+            print(f"Rank {rank} is relaxing sequences from {start_index} to {end_index}")
+            for i in range(start_index, end_index):
+                jd = prs.PyJobDistributor(
+                    f"{output_folder}/decoy_R{rank}_I{i}",
+                    nstruct=1,
+                    scorefxn=sfxn_scorer,
+                    compress=False,
                 )
+
+                # name = f"{output_folder}/decoy_R{rank}_I{i}"
+                # Get the mutated sequence translated to a pose
+                pose = self.mutate_native_pose(native_pose, sequences[i])
+                # Relax the pose
+                test_pose, mean_energy = self.relax_sequence(
+                    pose=pose,
+                    jd=jd,
+                    fastrelax_mover=fastrelax_mover,
+                    sfxn=sfxn_scorer,
+                )
+                if ligand_chain != "None" and ligand_chain is not None:
+                    # Get the apo score
+                    apo_score = self.calculate_Apo_Score(
+                        test_pose, sfxn_scorer, ligand_chain
+                    )
+                    # Get the binding score
+                    interface_score = self.calculate_Interface_Score(
+                        test_pose, sfxn_scorer, ligand_chain
+                    )
+                # Apply the hydrophobic filter and get the score
+                hydro_filter.apply(test_pose)
+                hydrophobic_score = hydro_filter.compute(test_pose)
+                # Calculate the salt bridges
+                n_salt_bridges = salt_bridges_calculator.get(
+                    key="salt_bridge", this_pose=test_pose
+                )
+                # Calculate the distances
+                if distance_dict != "None" and distance_dict is not None:
+                    res_distance = distance_dict.copy()
+                    for key, value in distance_dict.items():
+                        res_distance[key] = self.distance(test_pose, value[0], value[1])
+                # n_salt_bidges = self.get_salt_bridges(f"{job_output}_R{rank}_I{i}_0.pdb", "pdb")
+
+                # Gather results
+                relaxed_energies.append((i, mean_energy))
+                if ligand_chain != "None" and ligand_chain is not None:
+                    interface_scores.append((i, interface_score))
+                    apo_scores.append((i, apo_score))
+                hydrophobic_scores.append((i, hydrophobic_score))
+                n_salt_bridges_iter.append((i, n_salt_bridges))
+                if distance_dict != "None" and distance_dict is not None:
+                    distances_res.append((i, res_distance))
+
+            # Gather results from all processors
+            all_relaxed_energies = comm.gather(relaxed_energies, root=0)
+            if ligand_chain != "None" and ligand_chain is not None:
+                all_interface_scores = comm.gather(interface_scores, root=0)
+                all_apo_scores = comm.gather(apo_scores, root=0)
+            all_hydrophobic_scores = comm.gather(hydrophobic_scores, root=0)
+            all_salt_bridges = comm.gather(n_salt_bridges_iter, root=0)
+            if distance_dict != "None" and distance_dict is not None:
+                all_distances_res = comm.gather(distances_res, root=0)
+        except Exception as e:
+            print("Error in the main loop of the relaxation")
+            raise (ValueError(f"Error in the main loop of the relaxation: {e}"))
 
         # If rank 0, process the gathered results
         if rank == 0:
-            # Flatten the list of lists
-            def flatten_and_merge(all_data, column_names):
-                flattened_data = [item for sublist in all_data for item in sublist]
-                return pd.DataFrame(flattened_data, columns=column_names)
+            try:
+                # Flatten the list of lists
+                def flatten_and_merge(all_data, column_names):
+                    flattened_data = [item for sublist in all_data for item in sublist]
+                    return pd.DataFrame(flattened_data, columns=column_names)
 
-            df_relaxed_energies = flatten_and_merge(
-                all_relaxed_energies, ["Index", "Relax Energy"]
-            )
-            df_interface_scores = flatten_and_merge(
-                all_interface_scores, ["Index", "Interface Score"]
-            )
-            df_apo_scores = flatten_and_merge(all_apo_scores, ["Index", "Apo Score"])
-            df_hydrophobic_scores = flatten_and_merge(
-                all_hydrophobic_scores, ["Index", "Hydrophobic Score"]
-            )
-            df_salt_bridges = flatten_and_merge(
-                all_salt_bridges, ["Index", "Salt Bridges"]
-            )
-            flattened_dist = [item for sublist in all_distances_res for item in sublist]
-            df_distances = pd.DataFrame(
-                [item[1] for item in flattened_dist],
-                index=[item[0] for item in flattened_dist],
-            )
-            df_distances = df_distances.rename(columns=lambda x: "dist_" + x)
+                df_relaxed_energies = flatten_and_merge(
+                    all_relaxed_energies, ["Index", "Relax_Energy"]
+                )
+                if ligand_chain != "None" and ligand_chain is not None:
+                    df_interface_scores = flatten_and_merge(
+                        all_interface_scores, ["Index", "Interface_Score"]
+                    )
+                    df_apo_scores = flatten_and_merge(
+                        all_apo_scores, ["Index", "Apo_Score"]
+                    )
+                df_hydrophobic_scores = flatten_and_merge(
+                    all_hydrophobic_scores, ["Index", "Hydrophobic_Score"]
+                )
+                df_salt_bridges = flatten_and_merge(
+                    all_salt_bridges, ["Index", "Salt_Bridges"]
+                )
+                if distance_dict != "None" and distance_dict is not None:
+                    flattened_dist = [
+                        item for sublist in all_distances_res for item in sublist
+                    ]
+                    df_distances = pd.DataFrame(
+                        [item[1] for item in flattened_dist],
+                        index=[item[0] for item in flattened_dist],
+                    )
+                    df_distances = df_distances.rename(columns=lambda x: "dist_" + x)
 
-            # Create the final df with all the values
-            df = df_relaxed_energies
-            df = df.merge(df_interface_scores, on="Index")
-            df = df.merge(df_apo_scores, on="Index")
-            df = df.merge(df_hydrophobic_scores, on="Index")
-            df = df.merge(df_salt_bridges, on="Index")
-            df = df.merge(df_distances, left_on="Index", right_index=True)
+                # Create the final df with all the values
+                df = df_relaxed_energies
+                if ligand_chain != "None" and ligand_chain is not None:
+                    df = df.merge(df_interface_scores, on="Index")
+                    df = df.merge(df_apo_scores, on="Index")
+                df = df.merge(df_hydrophobic_scores, on="Index")
+                df = df.merge(df_salt_bridges, on="Index")
+                if distance_dict != "None" and distance_dict is not None:
+                    df = df.merge(df_distances, left_on="Index", right_index=True)
 
-            df.to_csv(f"{output_folder}/rosetta_scores.csv", index=False)
+                df.to_csv(f"{output_folder}/rosetta_scores.csv", index=False)
+            except Exception as e:
+                print(f"Error in rank 0: {e}")
+
 
 
 
 if __name__ == "__main__":
 
-    params_folder = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/Felip9/PET_params"
+    params_folder = "/gpfs/projects/bsc72/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/hmfo/params"
     seed = 1235
-    output_folder = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/metrics/testt"
-    native_pdb = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/Felip9/FeLip9-PET-1.pdb"
-    distances = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/distances.json"
-    sequences_file = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/mood_job/003/relax/sequences.txt"
-    cst_file = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/Felip9/FeLip9-PET-1_CA.cst"
+    output_folder = "/gpfs/projects/bsc72/acanella/Repos/multiObjectiveOptimizationDesign/tests/metrics/out_relax"
+    native_pdb = "/gpfs/projects/bsc72/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/hmfo/AF-A0A9E4RQT2@HFFCA@146.pdb"
+    # distances = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/distances.json"
+    distances = None
+    sequences_file = "/gpfs/projects/bsc72/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/hmfo/sequences.txt"
+    # cst_file = "/home/lavane/Users/acanella/Repos/multiObjectiveOptimizationDesign/tests/data/Felip9/FeLip9-PET-1_CA.cst"
+    cst_file = None
+    ligand_chain = "L"
 
-    if params_folder != None:
+    if params_folder is None:
+        patches = []
+        params = []
+    elif not os.path.exists(params_folder):  # Add this check
+        print(f"Warning: Directory {params_folder} does not exist")
+        patches = []
+        params = []
+    else:
         patches = [
             params_folder + "/" + x
             for x in os.listdir(params_folder)
@@ -455,22 +509,15 @@ if __name__ == "__main__":
             for x in os.listdir(params_folder)
             if x.endswith(".params")
         ]
-        if patches == []:
-            patches = None
-        if params == []:
-            raise ValueError(
-                f"Params files were not found in the given folder: {params_folder}!"
-            )
 
     # Prom a list of path files, create a string with all the paths separated by a space
-    params = " ".join(params)
-    patches = " ".join(patches)
-
-    print(f"Params:\n{params}")
-    print(f"Patches:\n{patches}")
-
     options = f"-relax:default_repeats 1 -constant_seed true -jran {seed}"
-    options += f" -extra_res_fa {params} -extra_patch_fa {patches}"
+    if params != []:
+        params = " ".join(params)
+        options += f" -extra_res_fa {params}"
+    if patches != []:
+        patches = " ".join(patches)
+        options += f" -extra_patch_fa {patches}"
 
     prs.pyrosetta.init(options=options)
 
@@ -482,41 +529,22 @@ if __name__ == "__main__":
     if not os.path.exists(native_pdb):
         raise ValueError(f"The native pdb file {native_pdb} does not exist")
 
-    if distances.endswith(".pkl"):
-        with open(distances, "rb") as file:
-            distances = pickle.load(file)
-    elif distances.endswith(".json"):
-        with open(distances, "r") as file:
-            distances = json.load(file)
+    if distances is not None:
+        if distances.endswith(".pkl"):
+            with open(distances, "rb") as file:
+                distances = pickle.load(file)
+        elif args.distances.endswith(".json"):
+            with open(distances, "r") as file:
+                distances = json.load(file)
 
     if not os.path.exists(sequences_file):
         raise ValueError(f"The sequence file {sequences_file} does not exists")
 
-    tracer = trace.Trace(
-        ignoredirs=[sys.prefix, sys.exec_prefix],
-        ignoremods=[
-            "inspect",
-            "contextlib",
-            "_bootstrap",
-            "_weakrefset",
-            "abc",
-            "posixpath",
-            "genericpath",
-            "textwrap",
-        ],
-        trace=1,
-        count=0,
-    )
-
-    # by default trace goes to stdout
-    # redirect to a different file for each processes
-
-    tracer.runfunc(
-        mpi_relax.main(
-            output_folder=output_folder,
-            sequences_file=sequences_file,
-            native_pdb=native_pdb,
-            distance_dict=distances,
-            cst_file=cst_file,
-        )
+    mpi_relax.main(
+        output_folder=output_folder,
+        sequences_file=sequences_file,
+        native_pdb=native_pdb,
+        distance_dict=distances,
+        cst_file=cst_file,
+        ligand_chain=ligand_chain,
     )

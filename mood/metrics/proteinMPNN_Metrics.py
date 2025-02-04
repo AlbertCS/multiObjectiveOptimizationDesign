@@ -1,10 +1,8 @@
-import io
 import json
 import os
 
 import numpy as np
 import pandas as pd
-from pkg_resources import Requirement, resource_stream
 
 from mood.metrics import Metric
 from mood.metrics.ProteinMPNN.protein_mpnn_run import mpnn_main
@@ -23,7 +21,7 @@ class ProteinMPNNMetrics(Metric):
     ):
         super().__init__()
         self.state = {
-            "ScoreMPNN": "negative",
+            "ScoreMPNN": False,
         }
         # The lower the score, the better the fit of the designed sequence to the protein structure.
         self._objectives = ["ScoreMPNN"]
@@ -43,41 +41,20 @@ class ProteinMPNNMetrics(Metric):
     def objectives(self):
         return self._objectives
 
-    def _copyScriptFile(
-        self, output_folder, script_name, no_py=False, subfolder=None, hidden=True
-    ):
-        """
-        Copy a script file from the MultiObjectiveOptimization package.
+    @objectives.setter
+    def objectives(self, value):
+        if not isinstance(value, list):
+            raise ValueError("Objectives must be a list")
+        if not all(isinstance(item, str) for item in value):
+            raise ValueError("All objectives must be strings")
+        self._objectives = value
 
-        Parameters
-        ==========
-
-        """
-        # Get script
-        base_path = "mood/metrics/scripts"
-        if subfolder is not None:
-            base_path = os.path.join(base_path, subfolder)
-
-        script_path = os.path.join(base_path, script_name)
-        with resource_stream(
-            Requirement.parse("MultiObjectiveOptimization"), script_path
-        ) as script_file:
-            script_file = io.TextIOWrapper(script_file)
-
-            # Adjust script name if no_py is True
-            if no_py:
-                script_name = script_name.replace(".py", "")
-
-            # Build the output path
-            if hidden:
-                output_path = os.path.join(output_folder, f".{script_name}")
-            else:
-                output_path = os.path.join(output_folder, script_name)
-
-            # Write the script to the output folder
-            with open(output_path, "w") as sof:
-                for line in script_file:
-                    sof.write(line)
+    def clean(self, folder_name, iteration, max_iteration):
+        mpnn_folder = f"{folder_name}/{str(iteration).zfill(3)}/mpnn"
+        if os.path.exists(mpnn_folder):
+            for file in os.listdir(mpnn_folder):
+                if file.endswith(".fasta"):
+                    os.remove(f"{mpnn_folder}/{file}")
 
     def compute(self, sequences, iteration, folder_name, chain):
 
@@ -99,28 +76,6 @@ class ProteinMPNNMetrics(Metric):
                 # Write each sequence to the file
                 file.write(f">s{i}\n")
                 file.write(sequence + "\n")
-
-        # Not needed for the evaluation only when creating the sequences
-        # if self.fixed_positions:
-        #     from mood.metrics.ProteinMPNN.parse_multiple_chains import (
-        #         main_parse_multiple_chains,
-        #     )
-
-        #     main_parse_multiple_chains(
-        #         input_path=f"{folder_name}/input",
-        #         output_path=f"{output_folder}/parsed_pdbs.jsonl",
-        #     )
-
-        #     from mood.metrics.ProteinMPNN.make_fixed_positions_dict import (
-        #         main_make_fixed_positions,
-        #     )
-
-        #     main_make_fixed_positions(
-        #         input_path=f"{output_folder}/parsed_pdbs.jsonl",
-        #         output_path=f"{output_folder}/fixed_positions.json",
-        #         chain_list=chain,
-        #         position_list=self.fixed_positions[chain],
-        #     )
 
         # Run the ProteinMPNN
         mpnn_main(
