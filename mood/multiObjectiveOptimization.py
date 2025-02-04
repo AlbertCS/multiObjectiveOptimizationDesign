@@ -11,6 +11,7 @@ import pickle
 import random
 import shutil
 import time
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -115,7 +116,8 @@ class MultiObjectiveOptimization:
     ) -> None:
 
         # Define the logger
-        self.logger = Logger(debug).get_log()
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        self.logger = Logger(debug, timestamp).get_log()
 
         self.metrics = metrics
         self.max_iteration = max_iteration
