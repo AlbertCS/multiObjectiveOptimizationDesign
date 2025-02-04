@@ -20,10 +20,11 @@ class RosettaMetrics(Metric):
         ligand_chain=None,
     ):
         super().__init__()
+        # State if the state is positive then is true
         self.state = {
-            "Relax_Energy": "negative",
-            "Hydrophobic_Score": "negative",
-            "Salt_Bridges": "positive",
+            "Relax_Energy": False,
+            "Hydrophobic_Score": False,
+            "Salt_Bridges": True,
         }
         self._objectives = ["Relax_Energy"]
         self.name = "rosettaMetrics"
@@ -33,14 +34,14 @@ class RosettaMetrics(Metric):
         self.native_pdb = native_pdb
         self.distances_file = distances_file
         if self.distances_file is not None:
-            self.state["distances"] = "negative"
+            self.state["distances"] = False
         self.cst_file = cst_file
         self.ligand_chain = ligand_chain
         # If there is a ligand add the metrics related to the ligand
         if self.ligand_chain is not None:
             self._objectives.append("Interface_Score")
-            self.state["Interface_Score"] = "negative"
-            self.state["Apo_Score"] = "negative"
+            self.state["Interface_Score"] = False
+            self.state["Apo_Score"] = False
 
     @property
     def objectives(self):
@@ -48,6 +49,10 @@ class RosettaMetrics(Metric):
 
     @objectives.setter
     def objectives(self, value):
+        if not isinstance(value, list):
+            raise ValueError("Objectives must be a list")
+        if not all(isinstance(item, str) for item in value):
+            raise ValueError("All objectives must be strings")
         self._objectives = value
 
     def clean(self, folder_name, iteration, max_iteration):

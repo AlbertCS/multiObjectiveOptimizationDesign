@@ -21,7 +21,7 @@ class ProteinMPNNMetrics(Metric):
     ):
         super().__init__()
         self.state = {
-            "ScoreMPNN": "negative",
+            "ScoreMPNN": False,
         }
         # The lower the score, the better the fit of the designed sequence to the protein structure.
         self._objectives = ["ScoreMPNN"]
@@ -40,6 +40,14 @@ class ProteinMPNNMetrics(Metric):
     @property
     def objectives(self):
         return self._objectives
+
+    @objectives.setter
+    def objectives(self, value):
+        if not isinstance(value, list):
+            raise ValueError("Objectives must be a list")
+        if not all(isinstance(item, str) for item in value):
+            raise ValueError("All objectives must be strings")
+        self._objectives = value
 
     def clean(self, folder_name, iteration, max_iteration):
         mpnn_folder = f"{folder_name}/{str(iteration).zfill(3)}/mpnn"
