@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-from mood.base.log import Logger
 from mood.base.sequence import Sequence
 from mood.optimizers.optimizer import Optimizer, OptimizersType
 
