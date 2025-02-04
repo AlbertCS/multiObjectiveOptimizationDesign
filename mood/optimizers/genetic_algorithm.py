@@ -566,7 +566,7 @@ class GeneticAlgorithm(Optimizer):
             metric
             for s in metric_states
             for metric, state in metric_states[s].items()
-            if state.lower() == "positive"
+            if state is True
         ]
 
         # Use pandas boolean indexing for efficient column negation
