@@ -45,7 +45,7 @@ class FrustraRMetrics(Metric):
 
     def clean(self, folder_name, iteration, max_iteration):
         # Clean frustration
-        if iteration != 0 and iteration != max_iteration - 1:
+        if iteration != 0 and iteration != max_iteration:
             frustrar_folder = f"{folder_name}/{str(iteration).zfill(3)}/frustrar"
             if os.path.exists(frustrar_folder):
                 for root, dirs, files in os.walk(f"{frustrar_folder}/pdb"):
