@@ -31,7 +31,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
 
         metrics = [
             ros_metric,
-            # ProteinMPNNMetrics(seed=1235, native_pdb=native_pdb),
+            ProteinMPNNMetrics(seed=1235, native_pdb=native_pdb),
             FrustraRMetrics(
                 license_key=license_key,
                 docker_image="docker://proteinphysiologylab/frustratometer:latest",
