@@ -12,12 +12,20 @@ from mood.base.sequence import Sequence
 from mood.optimizers.optimizer import Optimizer, OptimizersType
 
 
-def worker_init(class_instance):
+def worker_init(class_instance, init_params):
     """Initialize a new class instance in each worker process"""
     global instance
-    # Copy the necessary attributes from the original instance
-    instance = class_instance
-    instance.init_pyrosetta()
+    try:
+        # Recreate class instance with provided parameters
+        instance = class_instance(**init_params)
+
+        # Reinitialize random number generator with the same seed
+        instance.rng = random.Random(init_params["seed"])
+
+        instance.init_pyrosetta()
+    except Exception as e:
+        print(f"Worker initialization error: {e}")
+        raise
 
 
 def worker_evaluate_mutation(arg):
@@ -552,13 +560,17 @@ class GeneticAlgorithm(Optimizer):
 
         population_size = df_to_empty.shape[0]
 
-        # Changes the values by state
-        # Precompute the columns that need to be negated
-        columns_to_negate = [s for s in metric_states if metric_states[s] == "Positive"]
-        # Apply the negation using vectorized operations
-        df_to_empty[columns_to_negate] = df_to_empty[columns_to_negate].map(
-            lambda x: -x
-        )
+        # Vectorized approach to negate columns
+        columns_to_negate = [
+            metric
+            for s in metric_states
+            for metric, state in metric_states[s].items()
+            if state.lower() == "positive"
+        ]
+
+        # Use pandas boolean indexing for efficient column negation
+        negate_mask = df_to_empty.columns.isin(columns_to_negate)
+        df_to_empty.loc[:, negate_mask] *= -1
 
         values = df_to_empty.values
         ranks = np.zeros(population_size, dtype=int)
@@ -832,8 +844,11 @@ class GeneticAlgorithm(Optimizer):
         n_seqs_added: int = 0,
     ) -> Tuple[List[str], List[str], List[str], int]:
         """
-        Evaluate mutations on sequences using proper process initialization for PyRosetta.
+        Parallel mutation evaluation with robust multiprocessing support.
         """
+        # Protect against multiprocessing issues
+        multiprocessing.set_start_method("spawn", force=True)
+
         # Get previously evaluated sequences
         previous_sequences = {
             "sequences": mutated_sequences[:n_seqs_added],
@@ -841,7 +856,7 @@ class GeneticAlgorithm(Optimizer):
             "starting": starting_sequences[:n_seqs_added],
         }
 
-        # Prepare evaluation arguments
+        # Prepare sequences for evaluation
         sequences_to_evaluate = [
             (seq, mut, start, chain)
             for seq, mut, start in zip(
@@ -859,18 +874,35 @@ class GeneticAlgorithm(Optimizer):
                 len(previous_sequences["sequences"]),
             )
 
+        # Prepare initialization parameters matching the __init__ method
+        init_params = {
+            "population_size": self.population_size,
+            "init_mutation_rate": self.init_mutation_rate,
+            "seed": self.seed,
+            "debug": self.debug,
+            "data": self.data,
+            "mutable_aa": self.mutable_aa,
+            "eval_mutations": self.eval_mutations,
+            "eval_mutations_params": self.eval_mutations_params,
+            "crossover_iterations": self.crossover_iterations,
+            "mutation_iterations": self.mutation_iterations,
+            "max_mutation_per_iteration": self.max_mutation_per_iteration,
+            "min_mutation_per_iteration": self.min_mutation_per_iteration,
+            "folder_name": self.folder_name,
+        }
+
         # Initialize result containers
         better_sequences = {"sequences": [], "mutations": [], "starting": []}
 
         try:
-            # Create a pool with process initialization
-            num_processes = min(20, len(sequences_to_evaluate))
-            ctx = multiprocessing.get_context("spawn")
+            # Determine optimal number of processes
+            num_processes = max(1, multiprocessing.cpu_count() - 1)
 
-            with ctx.Pool(
+            # Use spawning context for better compatibility
+            with multiprocessing.get_context("spawn").Pool(
                 processes=num_processes,
                 initializer=worker_init,
-                initargs=(self,),  # Pass the current instance to initialize workers
+                initargs=(self.__class__, init_params),
             ) as pool:
                 # Process sequences in parallel
                 for result in pool.imap_unordered(
