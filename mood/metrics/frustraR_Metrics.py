@@ -23,7 +23,7 @@ class FrustraRMetrics(Metric):
         self.state = {
             "Total_Frustration_Index": "positive",
             "Positions_Frustrated": "negative",
-            "Totally_Frst_Index": "positive",
+            "Totally_Max_Frst_Index": "positive",
         }
         # This score is the summation of the highly frustrated residues (residues with positive energy)
         self._objectives = ["Total_Frustration_Index"]
@@ -186,7 +186,7 @@ class FrustraRMetrics(Metric):
             {
                 "Total_Frustration_Index": total_frustration_total,
                 "Positions_Frustrated": total_pos_frustrated,
-                "Totally_Frst_Index": total_max_frustrated,
+                "Totally_Max_Frst_Index": total_max_frustrated,
             }
         )
 
