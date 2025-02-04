@@ -113,11 +113,14 @@ class MultiObjectiveOptimization:
         recombination_with_mutation=False,
         eval_mutations_params=None,
         fixed_positions=None,
+        log_dir=".",
     ) -> None:
 
         # Define the logger
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        self.logger = Logger(debug, timestamp).get_log()
+        self.logger = Logger(
+            debug,
+            log_dir=log_dir,
+        ).get_log()
 
         self.metrics = metrics
         self.max_iteration = max_iteration
