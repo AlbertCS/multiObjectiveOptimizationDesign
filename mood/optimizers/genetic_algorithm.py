@@ -751,6 +751,7 @@ class GeneticAlgorithm(Optimizer):
     def mutation_on_crossover(self, parent_sequences, chain, mutations_probabilities):
         child_sequences = []
         sequences_to_add = []
+        mutations = []
         attemps = 0
         while len(child_sequences) < self.population_size:
             seq_index = self.data.nsequences(chain)
