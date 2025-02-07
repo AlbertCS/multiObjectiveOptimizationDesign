@@ -39,7 +39,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
         ]
         debug = True
         max_iteration = 50
-        population_size = 4
+        population_size = 25
         seed = 1235
         eval_mutations_params = {
             "min_energy_threshold": 0,
@@ -66,7 +66,7 @@ class TestmultiObjectiveOptimization(unittest.TestCase):
             seed=seed,
             population_size=population_size,
             offset=3,
-            eval_mutations_params=eval_mutations_params,
+            # eval_mutations_params=eval_mutations_params,
             mutation_probability=True,
         )
 
