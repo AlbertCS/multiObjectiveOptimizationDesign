@@ -81,7 +81,18 @@ class FrustraRMetrics(Metric):
                         + ".pdb"
                     )
                     pdbs.append(f"{folder_name}/{str(iteration).zfill(3)}/relax/{file}")
-        pdbs.sort()
+
+        def natural_sort_key(filepath):
+            import re
+
+            # Extract number between 'decoy_' and '_0.pdb'
+            match = re.search(r"decoy_(\d+)_", filepath)
+            if match:
+                return int(match.group(1))
+            return 0
+
+        # Sort files using natural sort
+        pdbs = sorted(pdbs, key=natural_sort_key)
         names = []
         for pdb in pdbs:
             name_pdb = pdb.split("/")[-1]
@@ -96,6 +107,15 @@ class FrustraRMetrics(Metric):
         # Get the msa file
         # Specify the output file name
         sequences_file = f"{output_folder}/pdb/sequences.fasta"
+
+        def natural_sort_key1(filename):
+            import re
+
+            # Extract number from decoy filename (e.g. 'decoy10.pdb' -> 10)
+            number = int(re.search(r"decoy(\d+)\.pdb$", filename).group(1))
+            return number
+
+        names = sorted(names, key=natural_sort_key1)
         # Open the file in write mode
         with open(sequences_file, "w") as file:
             # Iterate over the sequences
@@ -138,6 +158,8 @@ class FrustraRMetrics(Metric):
 
         # Get the frustration values
         total_frustration_total = []
+        total_postions_max = []
+        total_max_frustrated_total = []
         for name in names:
             with open(
                 f"{output_folder}/pdb/{name.replace(".pdb", "")}.done/FrustrationData/{name}_singleresidue",
@@ -187,13 +209,15 @@ class FrustraRMetrics(Metric):
                 index=False,
             )
             total_frustration_total.append(total_frustration)
+            total_postions_max.append(total_pos_frustrated)
+            total_max_frustrated_total.append(total_max_frustrated)
 
         # Create the dataframe
         df = pd.DataFrame(
             {
                 "Total_Frustration_Index": total_frustration_total,
-                "Positions_Frustrated": total_pos_frustrated,
-                "Totally_Max_Frst_Index": total_max_frustrated,
+                "Positions_Frustrated": total_postions_max,
+                "Totally_Max_Frst_Index": total_max_frustrated_total,
             }
         )
 

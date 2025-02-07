@@ -56,7 +56,7 @@ class RosettaMetrics(Metric):
         self._objectives = value
 
     def clean(self, folder_name, iteration, max_iteration):
-        if iteration != max_iteration:
+        if iteration != 0 and iteration != max_iteration:
             relax_folder = f"{folder_name}/{str(iteration).zfill(3)}/relax"
             if os.path.exists(relax_folder):
                 for file in os.listdir(relax_folder):

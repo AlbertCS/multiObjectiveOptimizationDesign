@@ -91,6 +91,7 @@ class ProteinMPNNMetrics(Metric):
             suppress_print=True,
         )
 
+        files = []
         if not os.path.exists(f"{output_folder}/score_only"):
             raise ValueError("The ProteinMPNN metrics did not run successfully")
         else:
@@ -98,6 +99,17 @@ class ProteinMPNNMetrics(Metric):
             for file in os.listdir(f"{output_folder}/score_only"):
                 if file.endswith("_pdb.npz"):
                     continue
+                files.append(file)
+
+            def natural_sort_key(s):
+                import re
+
+                # Extract number from filename (e.g. '1QYS_fasta_10.npz' -> 10)
+                number = int(re.search(r"_(\d+)\.npz$", s).group(1))
+                return number
+
+            files = sorted(files, key=natural_sort_key)
+            for file in files:
                 loaded_data = np.load(f"{output_folder}/score_only/{file}")
                 mean_scores.append(loaded_data["score"].mean())
 
